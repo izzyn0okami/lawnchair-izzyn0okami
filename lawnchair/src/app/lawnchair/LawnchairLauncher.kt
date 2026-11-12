@@ -37,6 +37,7 @@ import app.lawnchair.data.AppDatabase
 import app.lawnchair.data.wallpaper.service.WallpaperService
 import app.lawnchair.gamemode.ControllerModeWatcher
 import app.lawnchair.gamemode.GameModeActivity
+import app.lawnchair.gamemode.GameModeLauncher
 import app.lawnchair.gestures.GestureController
 import app.lawnchair.gestures.VerticalSwipeTouchController
 import app.lawnchair.gestures.config.GestureHandlerConfig
@@ -101,7 +102,7 @@ class LawnchairLauncher : QuickstepLauncher() {
 
     // Modo jogos: abre GameModeActivity quando um controle físico conecta com o launcher em primeiro plano.
     private val controllerModeWatcher by unsafeLazy {
-        ControllerModeWatcher(this) { startActivity(GameModeActivity.intent(this)) }
+        ControllerModeWatcher(this) { if (!GameModeLauncher.launch(this)) startActivity(GameModeActivity.intent(this)) }
     }
     private val defaultOverlay by unsafeLazy { OverlayCallbackImpl(this) }
     private val prefs by unsafeLazy { PreferenceManager.getInstance(this) }

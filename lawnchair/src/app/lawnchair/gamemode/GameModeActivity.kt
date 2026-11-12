@@ -61,6 +61,7 @@ class GameModeActivity : ComponentActivity() {
 private fun GameModeScreen(onExit: () -> Unit) {
     val context = LocalContext.current
     var autoEnter by remember { mutableStateOf(GameModeSettings.isAutoEnterEnabled(context)) }
+    val argosyInstalled = remember { GameModeLauncher.launchIntent(context) != null }
 
     Column(
         modifier = Modifier
@@ -74,7 +75,7 @@ private fun GameModeScreen(onExit: () -> Unit) {
             style = MaterialTheme.typography.headlineLarge,
         )
         Text(
-            text = stringResource(R.string.game_mode_placeholder),
+            text = stringResource(if (argosyInstalled) R.string.game_mode_argosy_found else R.string.game_mode_argosy_missing),
             style = MaterialTheme.typography.bodyLarge,
         )
         Row(
@@ -93,6 +94,14 @@ private fun GameModeScreen(onExit: () -> Unit) {
                     GameModeSettings.setAutoEnterEnabled(context, it)
                 },
             )
+        }
+        Button(
+            onClick = {
+                if (GameModeLauncher.launch(context)) onExit()
+            },
+            enabled = argosyInstalled,
+        ) {
+            Text(text = stringResource(R.string.game_mode_open_argosy))
         }
         Button(onClick = onExit) {
             Text(text = stringResource(R.string.game_mode_exit))
