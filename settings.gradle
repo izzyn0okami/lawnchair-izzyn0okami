@@ -108,6 +108,8 @@ include ':compatLib:compatLibVU'
 include ':compatLib:compatLibVV'
 include ':compatLib:compatLibVBaklava'
 
+include ':libretrodroid'
+
 include ':baseline-profile'
 
 include ':androidx-lib'

@@ -378,6 +378,7 @@ composeCompiler {
 addFrameworkJar('framework-16.jar')
 
 dependencies {
+    implementation projects.libretrodroid
     implementation projects.iconloaderlib
     implementation projects.searchuilib
     implementation projects.animationlib
