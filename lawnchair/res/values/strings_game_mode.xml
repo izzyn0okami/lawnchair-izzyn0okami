@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="game_mode_label">Modo jogos</string>
+    <string name="game_mode_title">Modo jogos</string>
+    <string name="game_mode_argosy_found">Argosy encontrado. Ele abre como modo jogos, e o Lawnchair continua sendo a tela inicial.</string>
+    <string name="game_mode_argosy_missing">Argosy não está instalado neste aparelho. Instale o app para usar o modo jogos.</string>
+    <string name="game_mode_open_argosy">Abrir Argosy</string>
+    <string name="game_mode_auto_enter">Entrar ao conectar um controle</string>
+    <string name="game_mode_exit">Voltar ao launcher</string>
+</resources>

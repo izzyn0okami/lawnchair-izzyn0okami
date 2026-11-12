@@ -35,6 +35,9 @@ import app.lawnchair.LawnchairApp.Companion.showQuickstepWarningIfNecessary
 import app.lawnchair.compat.LawnchairQuickstepCompat
 import app.lawnchair.data.AppDatabase
 import app.lawnchair.data.wallpaper.service.WallpaperService
+import app.lawnchair.gamemode.ControllerModeWatcher
+import app.lawnchair.gamemode.GameModeActivity
+import app.lawnchair.gamemode.GameModeLauncher
 import app.lawnchair.gestures.GestureController
 import app.lawnchair.gestures.VerticalSwipeTouchController
 import app.lawnchair.gestures.config.GestureHandlerConfig
@@ -96,6 +99,11 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 class LawnchairLauncher : QuickstepLauncher() {
+
+    // Modo jogos: abre GameModeActivity quando um controle físico conecta com o launcher em primeiro plano.
+    private val controllerModeWatcher by unsafeLazy {
+        ControllerModeWatcher(this) { if (!GameModeLauncher.launch(this)) startActivity(GameModeActivity.intent(this)) }
+    }
     private val defaultOverlay by unsafeLazy { OverlayCallbackImpl(this) }
     private val prefs by unsafeLazy { PreferenceManager.getInstance(this) }
     private val preferenceManager2 by unsafeLazy { PreferenceManager2.getInstance(this) }
@@ -467,8 +475,14 @@ class LawnchairLauncher : QuickstepLauncher() {
         return ActivityOptionsWrapper(options, callback)
     }
 
+    override fun onPause() {
+        controllerModeWatcher.stop()
+        super.onPause()
+    }
+
     override fun onResume() {
         super.onResume()
+        controllerModeWatcher.start()
         restartIfPending()
         refreshPredictionContainersFromModel()
 
