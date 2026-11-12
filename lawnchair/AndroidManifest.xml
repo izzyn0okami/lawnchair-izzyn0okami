@@ -125,6 +125,20 @@
             android:theme="@style/Theme.Transparent" />
 
         <activity
+            android:name="app.lawnchair.gamemode.GameModeActivity"
+            android:label="@string/game_mode_label"
+            android:icon="@mipmap/ic_launcher_home"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:theme="@style/Theme.Lawnchair">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name="app.lawnchair.smartspace.SmartspacePreferencesShortcut"
             android:theme="@style/Theme.Transparent" />
 
