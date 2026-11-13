@@ -188,7 +188,7 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
                     onExit = onExit,
                 )
 
-                tab == GameTab.Server -> ServerScreen(rootPath = rootPath, onDownloaded = { scanTick++ })
+                tab == GameTab.Server -> ServerScreen(rootPath = rootPath, onLibraryChange = { scanTick++ })
 
                 else -> ComingSoon(stringResource(R.string.game_soon_achievements))
             }

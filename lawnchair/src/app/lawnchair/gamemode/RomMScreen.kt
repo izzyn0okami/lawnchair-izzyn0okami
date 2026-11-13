@@ -48,7 +48,7 @@ private val ROMM_GAP = 14.dp
 
 /** Aba do servidor RomM: conectar por código de pareamento, listar jogos e baixar para a pasta de jogos. */
 @Composable
-internal fun ServerScreen(rootPath: String, onDownloaded: () -> Unit) {
+internal fun ServerScreen(rootPath: String, onLibraryChange: () -> Unit) {
     val context = LocalContext.current
     var connected by remember { mutableStateOf(RomMSettings.isConnected(context)) }
     if (!connected) {
@@ -56,7 +56,7 @@ internal fun ServerScreen(rootPath: String, onDownloaded: () -> Unit) {
     } else {
         ServerLibrary(
             rootPath = rootPath,
-            onDownloaded = onDownloaded,
+            onLibraryChange = onLibraryChange,
             onDisconnect = {
                 RomMSettings.clear(context)
                 connected = false
@@ -139,7 +139,7 @@ private fun connect(address: String, code: String): Result<Pair<String, String>>
 }
 
 @Composable
-private fun ServerLibrary(rootPath: String, onDownloaded: () -> Unit, onDisconnect: () -> Unit) {
+private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisconnect: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val url = remember { RomMSettings.url(context).orEmpty() }
@@ -173,7 +173,7 @@ private fun ServerLibrary(rootPath: String, onDownloaded: () -> Unit, onDisconne
             }.onFailure { error = context.getString(R.string.game_romm_download_error, game.title, it.message ?: it.toString()) }
             progress.remove(game.id)
             diskTick++
-            onDownloaded()
+            onLibraryChange()
         }
     }
 
