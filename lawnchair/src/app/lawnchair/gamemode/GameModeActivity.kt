@@ -57,12 +57,15 @@ class GameModeActivity : ComponentActivity() {
 
     private var resumeTick by mutableIntStateOf(0)
     private var padLost by mutableStateOf(false)
-    private val lostWatcher = ControllerLostWatcher(this) {
-        if (GameModeSettings.isAutoEnterEnabled(this)) padLost = true
-    }
+    private lateinit var lostWatcher: ControllerLostWatcher
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Activity só possui Context válido depois que o Android conclui a anexação.
+        // Inicializar o watcher aqui evita acessar applicationContext durante a construção.
+        lostWatcher = ControllerLostWatcher(applicationContext) {
+            if (GameModeSettings.isAutoEnterEnabled(applicationContext)) padLost = true
+        }
         enableEdgeToEdge()
         setContent {
             LawnchairTheme {
