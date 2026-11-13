@@ -75,4 +75,5 @@
     <string name="game_romm_download">Baixar</string>
     <string name="game_romm_downloading">Baixando %1$d%%</string>
     <string name="game_romm_downloaded">Baixado</string>
+    <string name="game_mode_status_syncing">Sincronizando saves com o servidor…</string>
 </resources>

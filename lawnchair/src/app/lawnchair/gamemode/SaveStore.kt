@@ -14,8 +14,11 @@ class SaveStore(context: Context, coreId: String, romFile: File) {
         romFile.nameWithoutExtension.replace(Regex("[^A-Za-z0-9._ -]"), "_"),
     ).apply { mkdirs() }
 
-    private val sramFile = File(dir, "sram.srm")
-    private val stateFile = File(dir, "state1.state")
+    val sramFile = File(dir, "sram.srm")
+    val stateFile = File(dir, "state1.state")
+
+    /** Cópias de segurança de saves substituídos durante a sincronização. */
+    val backupDir = File(dir, "backups")
 
     fun readSram(): ByteArray? = sramFile.takeIf { it.isFile && it.length() > 0 }?.readBytes()
 

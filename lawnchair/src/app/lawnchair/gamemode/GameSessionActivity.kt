@@ -200,6 +200,15 @@ class GameSessionActivity : ComponentActivity() {
         resumedAtMs = SystemClock.elapsedRealtime()
     }
 
+    override fun onStop() {
+        super.onStop()
+        val rom = romPath ?: return
+        val core = saveStore?.let { coreIdOf() } ?: return
+        SaveSync.pushAsync(this, rom, core)
+    }
+
+    private fun coreIdOf(): String? = intent.getStringExtra(EXTRA_CORE_PATH)?.let { File(it).name.removeSuffix("_libretro_android.so") }
+
     override fun onPause() {
         // Antes do super: a superfície de vídeo ainda está ativa e consegue entregar o save.
         persistSram()

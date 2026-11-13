@@ -7,6 +7,7 @@ import java.io.IOException
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -24,6 +25,13 @@ data class RemoteGame(
     /** Pasta de destino dentro da pasta de jogos: uma subpasta por plataforma. */
     fun destination(root: File): File = File(File(root, platform.slug), fileName)
 }
+
+enum class RemoteFileKind(val path: String, val part: String) {
+    Save("saves", "saveFile"),
+    State("states", "stateFile"),
+}
+
+data class RemoteFile(val id: Long, val emulator: String?, val updatedAtMs: Long)
 
 /** Endereço do servidor e token, guardados só neste aparelho. */
 object RomMSettings {
@@ -171,6 +179,57 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
             }
             file
         }.getOrNull()
+    }
+
+    /** Saves (bateria) e estados guardados no servidor para um jogo. */
+    fun listRemoteFiles(kind: RemoteFileKind, romId: Long): List<RemoteFile> {
+        val url = base.resolve("api/${kind.path}")!!.newBuilder().addQueryParameter("rom_id", romId.toString()).build()
+        val text = http.newCall(request(url).build()).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("Servidor respondeu ${response.code}")
+            response.body.string()
+        }
+        val array = org.json.JSONArray(text)
+        return (0 until array.length()).map { parseRemoteFile(array.getJSONObject(it)) }
+    }
+
+    private fun parseRemoteFile(json: JSONObject) = RemoteFile(
+        id = json.getLong("id"),
+        emulator = json.optString("emulator").ifEmpty { null },
+        updatedAtMs = parseTime(json.optString("updated_at")),
+    )
+
+    private fun parseTime(text: String): Long = runCatching { java.time.OffsetDateTime.parse(text).toInstant().toEpochMilli() }
+        .recoverCatching { java.time.Instant.parse(text).toEpochMilli() }
+        .recoverCatching { java.time.LocalDateTime.parse(text).toInstant(java.time.ZoneOffset.UTC).toEpochMilli() }
+        .getOrDefault(0L)
+
+    fun downloadRemoteFile(kind: RemoteFileKind, id: Long, target: File) {
+        val url = base.resolve("api/${kind.path}/$id/content")!!
+        http.newCall(request(url).build()).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("Servidor respondeu ${response.code}")
+            target.outputStream().use { response.body.byteStream().copyTo(it) }
+        }
+    }
+
+    /** Envia o arquivo: atualiza o existente ([existingId]) ou cria um novo; devolve o registro no servidor. */
+    fun uploadRemoteFile(kind: RemoteFileKind, romId: Long, emulator: String, existingId: Long?, file: File, uploadName: String): RemoteFile {
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart(kind.part, uploadName, file.readBytes().toRequestBody("application/octet-stream".toMediaType()))
+            .build()
+        val builder = if (existingId != null) {
+            request(base.resolve("api/${kind.path}/$existingId")!!).put(body)
+        } else {
+            val url = base.resolve("api/${kind.path}")!!.newBuilder()
+                .addQueryParameter("rom_id", romId.toString())
+                .addQueryParameter("emulator", emulator)
+                .build()
+            request(url).post(body)
+        }
+        http.newCall(builder.build()).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("Servidor respondeu ${response.code}")
+            return parseRemoteFile(JSONObject(response.body.string()))
+        }
     }
 
     private companion object {

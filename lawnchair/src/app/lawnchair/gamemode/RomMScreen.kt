@@ -168,7 +168,9 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
             progress[game.id] = 0L
             runCatching {
                 withContext(Dispatchers.IO) {
-                    client.download(game, game.destination(root)) { bytes -> progress[game.id] = bytes }
+                    val target = game.destination(root)
+                    client.download(game, target) { bytes -> progress[game.id] = bytes }
+                    SaveSync.link(context, target.absolutePath, game.id)
                 }
             }.onFailure { error = context.getString(R.string.game_romm_download_error, game.title, it.message ?: it.toString()) }
             progress.remove(game.id)
