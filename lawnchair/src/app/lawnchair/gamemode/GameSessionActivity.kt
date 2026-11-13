@@ -65,16 +65,20 @@ class GameSessionActivity : ComponentActivity() {
     private var selectDown = false
     private var startDown = false
     private var resumedAtMs = 0L
-    private val lostWatcher = ControllerLostWatcher(this) {
-        if (!menuOpen) {
-            setMenu(true)
-            Toast.makeText(this, R.string.game_session_pad_disconnected, Toast.LENGTH_SHORT).show()
-        }
-    }
+    private lateinit var lostWatcher: ControllerLostWatcher
     private var romPath: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // O Context da Activity só é válido após super.onCreate().
+        // Inicializar aqui evita a NPE ao construir a Activity antes do attach.
+        lostWatcher = ControllerLostWatcher(applicationContext) {
+            if (!menuOpen) {
+                setMenu(true)
+                Toast.makeText(this, R.string.game_session_pad_disconnected, Toast.LENGTH_SHORT).show()
+            }
+        }
 
         val corePath = intent.getStringExtra(EXTRA_CORE_PATH)
         val romPath = intent.getStringExtra(EXTRA_ROM_PATH)
