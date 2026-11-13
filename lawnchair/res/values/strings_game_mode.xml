@@ -36,7 +36,6 @@
     <string name="game_tab_achievements">Conquistas</string>
     <string name="game_tab_settings">Configurações</string>
     <string name="game_soon">Em breve</string>
-    <string name="game_soon_achievements">As conquistas do RetroAchievements chegam em um marco futuro.</string>
     <string name="game_continue_playing">Continuar jogando</string>
     <string name="game_featured">Em destaque</string>
     <string name="game_continue">Continuar</string>
@@ -81,4 +80,14 @@
     <string name="game_pad_disconnected_body">Quer continuar no modo jogos ou voltar ao launcher?</string>
     <string name="game_pad_stay">Continuar aqui</string>
     <string name="game_session_pad_disconnected">Controle desconectado: jogo pausado</string>
+    <string name="game_ra_title">RetroAchievements</string>
+    <string name="game_ra_howto">Entre com sua conta do RetroAchievements. As conquistas valem automaticamente nos jogos compatíveis (NES, SNES, Game Boy, GBC, GBA e Mega Drive) e aparecem na tela durante o jogo. Só o modo normal, sem hardcore.</string>
+    <string name="game_ra_user">Usuário</string>
+    <string name="game_ra_password">Senha</string>
+    <string name="game_ra_login">Entrar</string>
+    <string name="game_ra_logging_in">Entrando…</string>
+    <string name="game_ra_connected">Conectado como %1$s</string>
+    <string name="game_ra_logout">Sair da conta</string>
+    <string name="game_ra_unlocked">Conquista desbloqueada: %1$s (+%2$d)</string>
+    <string name="game_ra_progress">Conquistas: %1$d de %2$d</string>
 </resources>

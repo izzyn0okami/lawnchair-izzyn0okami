@@ -129,7 +129,7 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
 
     BackHandler(enabled = detail != null) { detail = null }
 
-    suspend fun startGame(coreId: String, romPath: String, title: String, loadState: Boolean) {
+    suspend fun startGame(coreId: String, romPath: String, title: String, loadState: Boolean, platform: GamePlatform?) {
         val core = CoreInstaller.ensureInstalled(context, coreId) { bytes ->
             status = context.getString(R.string.game_mode_status_downloading, coreId, bytes / 1024)
         }.getOrThrow()
@@ -138,13 +138,13 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
             withTimeoutOrNull(SYNC_TIMEOUT_MS) { withContext(Dispatchers.IO) { SaveSync.pull(context, romPath, coreId) } }
         }
         status = context.getString(R.string.game_mode_status_starting, title)
-        context.startActivity(GameSessionActivity.intent(context, core.absolutePath, romPath, loadState))
+        context.startActivity(GameSessionActivity.intent(context, core.absolutePath, romPath, loadState, platform?.slug))
     }
 
     fun play(game: LocalGame, loadState: Boolean = false) {
         scope.launch {
             busy = true
-            runCatching { startGame(game.platform.coreId, game.path, game.title, loadState) }
+            runCatching { startGame(game.platform.coreId, game.path, game.title, loadState, game.platform) }
                 .onFailure { status = context.getString(R.string.game_mode_status_error, it.message ?: it.toString()) }
             busy = false
         }
@@ -172,7 +172,7 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
                 val coreId = checkNotNull(RomLauncher.coreFor(rom.name)) {
                     context.getString(R.string.game_mode_status_unsupported, rom.name)
                 }
-                startGame(coreId, rom.absolutePath, rom.name, false)
+                startGame(coreId, rom.absolutePath, rom.name, false, GamePlatforms.resolve(emptyList(), rom.extension))
             }.onFailure { status = context.getString(R.string.game_mode_status_error, it.message ?: it.toString()) }
             busy = false
         }
@@ -227,7 +227,7 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
 
                 tab == GameTab.Server -> ServerScreen(rootPath = rootPath, onLibraryChange = { scanTick++ })
 
-                else -> ComingSoon(stringResource(R.string.game_soon_achievements))
+                else -> AchievementsScreen()
             }
         }
         if (status.isNotEmpty()) {
@@ -295,19 +295,6 @@ private fun TopBar(selected: GameTab, onSelect: (GameTab) -> Unit) {
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun ComingSoon(message: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(40.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(text = stringResource(R.string.game_soon), color = GameColors.text, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Text(text = message, color = GameColors.textDim, fontSize = 16.sp)
     }
 }
 

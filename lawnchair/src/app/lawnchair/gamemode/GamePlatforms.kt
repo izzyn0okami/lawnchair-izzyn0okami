@@ -7,6 +7,8 @@ data class GamePlatform(
     val extensions: Set<String>,
     val folderAliases: Set<String>,
     val sortOrder: Int,
+    /** Identificador do console no RetroAchievements (null = sem conquistas). */
+    val raConsoleId: Int? = null,
 )
 
 /**
@@ -16,12 +18,12 @@ data class GamePlatform(
 object GamePlatforms {
 
     val all = listOf(
-        GamePlatform("nes", "Nintendo Entertainment System", "fceumm", setOf("nes", "unf", "unif", "fds"), setOf("nes", "famicom", "fc"), 10),
-        GamePlatform("snes", "Super Nintendo", "snes9x", setOf("sfc", "smc", "swc", "fig"), setOf("snes", "sfc", "superfamicom", "supernintendo"), 20),
-        GamePlatform("gb", "Game Boy", "mgba", setOf("gb"), setOf("gb", "gameboy"), 30),
-        GamePlatform("gbc", "Game Boy Color", "mgba", setOf("gbc"), setOf("gbc", "gameboycolor"), 31),
-        GamePlatform("gba", "Game Boy Advance", "mgba", setOf("gba"), setOf("gba", "gameboyadvance"), 32),
-        GamePlatform("genesis", "Mega Drive / Genesis", "genesis_plus_gx", setOf("md", "gen", "smd"), setOf("genesis", "megadrive", "md", "segagenesis", "segamegadrive"), 40),
+        GamePlatform("nes", "Nintendo Entertainment System", "fceumm", setOf("nes", "unf", "unif", "fds"), setOf("nes", "famicom", "fc"), 10, 7),
+        GamePlatform("snes", "Super Nintendo", "snes9x", setOf("sfc", "smc", "swc", "fig"), setOf("snes", "sfc", "superfamicom", "supernintendo"), 20, 3),
+        GamePlatform("gb", "Game Boy", "mgba", setOf("gb"), setOf("gb", "gameboy"), 30, 4),
+        GamePlatform("gbc", "Game Boy Color", "mgba", setOf("gbc"), setOf("gbc", "gameboycolor"), 31, 6),
+        GamePlatform("gba", "Game Boy Advance", "mgba", setOf("gba"), setOf("gba", "gameboyadvance"), 32, 5),
+        GamePlatform("genesis", "Mega Drive / Genesis", "genesis_plus_gx", setOf("md", "gen", "smd"), setOf("genesis", "megadrive", "md", "segagenesis", "segamegadrive"), 40, 1),
     )
 
     /** Extensões genéricas: só valem quando a pasta já diz a plataforma. */

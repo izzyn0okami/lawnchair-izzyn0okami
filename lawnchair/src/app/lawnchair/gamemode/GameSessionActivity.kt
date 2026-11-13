@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -67,6 +69,9 @@ class GameSessionActivity : ComponentActivity() {
     private var resumedAtMs = 0L
     private lateinit var lostWatcher: ControllerLostWatcher
     private var romPath: String? = null
+    private var raSession: RaSession? = null
+    private var raToast by mutableStateOf<String?>(null)
+    private var raProgress by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -112,13 +117,39 @@ class GameSessionActivity : ComponentActivity() {
         lifecycle.addObserver(view)
         setContentView(view)
 
+        val platform = intent.getStringExtra(EXTRA_PLATFORM)?.let(GamePlatforms::bySlug)
+        if (platform?.raConsoleId != null && RaSettings.isLoggedIn(this)) {
+            val session = RaSession(
+                context = applicationContext,
+                view = view,
+                platform = platform,
+                romPath = romPath,
+                scope = lifecycleScope,
+                onUnlock = { raToast = getString(R.string.game_ra_unlocked, it.title, it.points) },
+                onProgress = { earned, total -> raProgress = if (total > 0) getString(R.string.game_ra_progress, earned, total) else null },
+            )
+            raSession = session
+            lifecycleScope.launch {
+                view.getGLRetroEvents().first { it is GLRetroView.GLRetroEvents.FrameRendered }
+                session.start()
+            }
+        }
+
         addContentView(
             ComposeView(this).apply {
                 setContent {
                     LawnchairTheme {
+                        raToast?.let { text ->
+                            LaunchedEffect(text) {
+                                delay(RA_TOAST_MS)
+                                if (raToast == text) raToast = null
+                            }
+                            AchievementToast(text)
+                        }
                         if (menuOpen) {
                             PauseMenu(
                                 title = File(romPath).nameWithoutExtension,
+                                subtitle = raProgress,
                                 canLoad = store.hasState(),
                                 onResume = { setMenu(false) },
                                 onSave = { saveQuickState() },
@@ -211,6 +242,11 @@ class GameSessionActivity : ComponentActivity() {
         lostWatcher.start()
     }
 
+    override fun onDestroy() {
+        raSession?.stop()
+        super.onDestroy()
+    }
+
     override fun onStop() {
         super.onStop()
         val rom = romPath ?: return
@@ -283,18 +319,22 @@ class GameSessionActivity : ComponentActivity() {
         private const val EXTRA_CORE_PATH = "core_path"
         private const val EXTRA_ROM_PATH = "rom_path"
         private const val EXTRA_LOAD_STATE = "load_state"
+        private const val EXTRA_PLATFORM = "platform"
+        private const val RA_TOAST_MS = 4_000L
         private const val SRAM_AUTOSAVE_MS = 60_000L
 
-        fun intent(context: Context, corePath: String, romPath: String, loadState: Boolean = false): Intent = Intent(context, GameSessionActivity::class.java)
+        fun intent(context: Context, corePath: String, romPath: String, loadState: Boolean = false, platformSlug: String? = null): Intent = Intent(context, GameSessionActivity::class.java)
             .putExtra(EXTRA_CORE_PATH, corePath)
             .putExtra(EXTRA_ROM_PATH, romPath)
             .putExtra(EXTRA_LOAD_STATE, loadState)
+            .putExtra(EXTRA_PLATFORM, platformSlug)
     }
 }
 
 @Composable
 private fun PauseMenu(
     title: String,
+    subtitle: String?,
     canLoad: Boolean,
     onResume: () -> Unit,
     onSave: () -> Unit,
@@ -324,8 +364,11 @@ private fun PauseMenu(
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
-                modifier = Modifier.padding(bottom = 16.dp),
+                modifier = Modifier.padding(bottom = if (subtitle == null) 16.dp else 2.dp),
             )
+            if (subtitle != null) {
+                Text(text = subtitle, color = GameColors.success, fontSize = 14.sp, modifier = Modifier.padding(bottom = 14.dp))
+            }
             GameButton(stringResource(R.string.game_session_resume), onResume, primary = true, modifier = Modifier.focusRequester(firstItem))
             GameButton(stringResource(R.string.game_session_save_state), onSave)
             GameButton(stringResource(R.string.game_session_load_state), onLoad, enabled = canLoad)
@@ -334,5 +377,20 @@ private fun PauseMenu(
             Spacer(Modifier.weight(1f))
             Text(text = stringResource(R.string.game_session_autosave_note), color = GameColors.textDim, fontSize = 13.sp)
         }
+    }
+}
+
+@Composable
+private fun AchievementToast(text: String) {
+    Box(modifier = Modifier.fillMaxSize().padding(top = 24.dp), contentAlignment = Alignment.TopCenter) {
+        Text(
+            text = text,
+            color = GameColors.text,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier
+                .background(GameColors.panel, RoundedCornerShape(12.dp))
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+        )
     }
 }
