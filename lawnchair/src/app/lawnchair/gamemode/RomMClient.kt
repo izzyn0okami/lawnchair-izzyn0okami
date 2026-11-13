@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.core.content.edit
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -85,7 +86,18 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
 
     val baseAddress: String get() = baseUrl.trimEnd('/')
 
-    private val http = OkHttpClient()
+    // Mesmos prazos do Argosy: servidor remoto ou atrás de túnel pode demorar a responder.
+    private val http = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .build()
+
+    /** Listar a biblioteca inteira e baixar jogos grandes podem ficar parados por bastante tempo. */
+    private val longHttp = http.newBuilder()
+        .readTimeout(15, TimeUnit.MINUTES)
+        .writeTimeout(15, TimeUnit.MINUTES)
+        .build()
     private val base: HttpUrl = baseUrl.trimEnd('/').plus("/").toHttpUrl()
 
     private fun request(url: HttpUrl): Request.Builder {
@@ -190,7 +202,7 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
                 .addQueryParameter("with_char_index", "false")
                 .addQueryParameter("with_filter_values", "false")
                 .build()
-            val json = http.newCall(request(url).build()).execute().use { response ->
+            val json = longHttp.newCall(request(url).build()).execute().use { response ->
                 if (!response.isSuccessful) throw IOException("Servidor respondeu ${response.code}")
                 JSONObject(response.body.string())
             }
@@ -227,7 +239,7 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
             .build()
         target.parentFile?.mkdirs()
         val temp = File(target.parentFile, "${target.name}.part")
-        http.newCall(request(url).build()).execute().use { response ->
+        longHttp.newCall(request(url).build()).execute().use { response ->
             if (!response.isSuccessful) throw IOException("Servidor respondeu ${response.code}")
             var total = 0L
             response.body.byteStream().use { input ->
