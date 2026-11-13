@@ -5,10 +5,17 @@
     <string name="game_mode_placeholder">Esqueleto do modo jogos. A biblioteca de jogos entra aqui nos próximos marcos.</string>
     <string name="game_mode_auto_enter">Entrar ao conectar um controle</string>
     <string name="game_mode_exit">Voltar ao launcher</string>
-    <string name="game_mode_play_rom">Escolher ROM e jogar (teste do motor)</string>
+    <string name="game_mode_play_rom">Abrir ROM avulsa</string>
     <string name="game_mode_status_importing">Copiando a ROM…</string>
     <string name="game_mode_status_downloading">Baixando o núcleo %1$s: %2$d KB</string>
     <string name="game_mode_status_starting">Abrindo %1$s…</string>
     <string name="game_mode_status_unsupported">Sem núcleo para %1$s (por enquanto: GBA, GB, GBC, SNES, NES e Mega Drive).</string>
     <string name="game_mode_status_error">Erro: %1$s</string>
+    <string name="game_mode_folder_label">Pasta de jogos: %1$s</string>
+    <string name="game_mode_choose_folder">Escolher pasta</string>
+    <string name="game_mode_refresh">Atualizar biblioteca</string>
+    <string name="game_mode_needs_access">Para ler e gravar nessa pasta, o Android exige o acesso a todos os arquivos.</string>
+    <string name="game_mode_grant_access">Liberar acesso</string>
+    <string name="game_mode_empty_library">Nenhum jogo encontrado. Coloque ROMs em subpastas como gba, snes, nes ou genesis dentro da pasta de jogos.</string>
+    <string name="game_mode_status_folder_invalid">Essa pasta não pode ser usada. Escolha uma pasta do armazenamento interno ou do cartão SD.</string>
 </resources>

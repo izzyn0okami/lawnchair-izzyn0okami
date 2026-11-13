@@ -7,22 +7,10 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** Núcleo Libretro escolhido para cada extensão de ROM (teste do M2; a biblioteca real vem no M3). */
+/** Abre uma ROM avulsa escolhida no seletor de arquivos (fora da pasta de jogos). */
 object RomLauncher {
 
-    private val coreByExtension = mapOf(
-        "gba" to "mgba",
-        "gb" to "mgba",
-        "gbc" to "mgba",
-        "sfc" to "snes9x",
-        "smc" to "snes9x",
-        "nes" to "fceumm",
-        "md" to "genesis_plus_gx",
-        "gen" to "genesis_plus_gx",
-        "smd" to "genesis_plus_gx",
-    )
-
-    fun coreFor(fileName: String): String? = coreByExtension[fileName.substringAfterLast('.', "").lowercase()]
+    fun coreFor(fileName: String): String? = GamePlatforms.resolve(emptyList(), fileName.substringAfterLast('.', ""))?.coreId
 
     /** Copia a ROM escolhida pelo seletor de arquivos para a pasta do app e devolve o arquivo. */
     suspend fun importRom(context: Context, uri: Uri): File = withContext(Dispatchers.IO) {
