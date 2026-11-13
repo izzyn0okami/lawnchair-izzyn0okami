@@ -243,6 +243,7 @@ private fun reachable(address: String): RomMClient {
 /** Acha o servidor e pede o código de aprovação. */
 private fun beginPairing(context: Context, address: String): Result<DevicePairing> = runCatching {
     val client = reachable(address)
+
     @Suppress("HardwareIds")
     val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
     val clientId = "tandem-${androidId ?: java.util.UUID.randomUUID()}"
