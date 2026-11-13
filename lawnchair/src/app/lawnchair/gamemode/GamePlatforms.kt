@@ -25,9 +25,17 @@ object GamePlatforms {
     )
 
     /** Extensões genéricas: só valem quando a pasta já diz a plataforma. */
-    private val genericExtensions = setOf("zip", "bin")
+    val genericExtensions = setOf("zip", "bin")
 
     private fun normalize(name: String): String = name.lowercase().filter { it.isLetterOrDigit() }
+
+    /** Plataforma do nosso motor equivalente ao identificador de plataforma do RomM. */
+    fun fromRomM(slug: String?): GamePlatform? {
+        val key = normalize(slug.orEmpty())
+        if (key.isEmpty()) return null
+        return all.firstOrNull { key in it.folderAliases || key == normalize(it.slug) }
+            ?: if ("megadrive" in key || "genesis" in key) bySlug("genesis") else null
+    }
 
     fun bySlug(slug: String): GamePlatform? = all.firstOrNull { it.slug == slug }
 

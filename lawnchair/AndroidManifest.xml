@@ -57,7 +57,7 @@
         android:name="${packageName}.permission.HOTSEAT_EDU"
         tools:node="remove" />
 
-    <application>
+    <application android:usesCleartextTraffic="true">
         <meta-data
             android:name="preloaded_fonts"
             android:resource="@array/preloaded_fonts" />
