@@ -90,4 +90,14 @@
     <string name="game_ra_logout">Sair da conta</string>
     <string name="game_ra_unlocked">Conquista desbloqueada: %1$s (+%2$d)</string>
     <string name="game_ra_progress">Conquistas: %1$d de %2$d</string>
+    <string name="game_romm_howto_device">Digite o endereço do servidor e toque em Conectar. O app mostra um código: abra o RomM no navegador (já logado na sua conta) e aprove o aparelho. Esta tela continua sozinha.</string>
+    <string name="game_romm_pair_code">Código: %1$s</string>
+    <string name="game_romm_pair_steps">Confirme que o código no RomM é o mesmo acima e toque em aprovar.</string>
+    <string name="game_romm_open_browser">Abrir o RomM no navegador</string>
+    <string name="game_romm_pair_wait">Aguardando a aprovação…</string>
+    <string name="game_romm_pair_cancel">Cancelar</string>
+    <string name="game_romm_pair_denied">O pareamento foi negado no RomM.</string>
+    <string name="game_romm_pair_expired">O código expirou. Toque em Conectar para gerar outro.</string>
+    <string name="game_romm_use_code">Usar código de pareamento</string>
+    <string name="game_romm_use_device">Aprovar pelo navegador</string>
 </resources>

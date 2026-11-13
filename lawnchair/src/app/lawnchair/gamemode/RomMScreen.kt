@@ -1,6 +1,11 @@
 package app.lawnchair.gamemode
 
+import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -29,6 +34,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -40,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.android.launcher3.R
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -71,8 +79,27 @@ private fun ConnectForm(onConnect: () -> Unit) {
     val scope = rememberCoroutineScope()
     var address by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
+    var manual by remember { mutableStateOf(false) }
+    var pairing by remember { mutableStateOf<DevicePairing?>(null) }
     var message by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+
+    val pending = pairing
+    if (pending != null) {
+        PairingWait(
+            pairing = pending,
+            onApprove = { token ->
+                RomMSettings.save(context, pending.baseUrl, token)
+                onConnect()
+            },
+            onFail = { reason ->
+                pairing = null
+                message = reason
+            },
+            onCancel = { pairing = null },
+        )
+        return
+    }
 
     Column(
         modifier = Modifier
@@ -81,7 +108,11 @@ private fun ConnectForm(onConnect: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(stringResource(R.string.game_romm_title), color = GameColors.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Text(stringResource(R.string.game_romm_howto), color = GameColors.textDim, fontSize = 14.sp)
+        Text(
+            stringResource(if (manual) R.string.game_romm_howto else R.string.game_romm_howto_device),
+            color = GameColors.textDim,
+            fontSize = 14.sp,
+        )
         OutlinedTextField(
             value = address,
             onValueChange = { address = it },
@@ -89,33 +120,122 @@ private fun ConnectForm(onConnect: () -> Unit) {
             singleLine = true,
             modifier = Modifier.width(520.dp),
         )
-        OutlinedTextField(
-            value = code,
-            onValueChange = { code = it },
-            label = { Text(stringResource(R.string.game_romm_code)) },
-            singleLine = true,
-            modifier = Modifier.width(520.dp),
-        )
+        if (manual) {
+            OutlinedTextField(
+                value = code,
+                onValueChange = { code = it },
+                label = { Text(stringResource(R.string.game_romm_code)) },
+                singleLine = true,
+                modifier = Modifier.width(520.dp),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            GameButton(
+                label = stringResource(R.string.game_romm_connect),
+                enabled = !busy && address.isNotBlank() && (!manual || code.isNotBlank()),
+                primary = true,
+                modifier = Modifier.width(220.dp),
+                onClick = {
+                    scope.launch {
+                        busy = true
+                        message = context.getString(R.string.game_romm_connecting)
+                        if (manual) {
+                            val result = withContext(Dispatchers.IO) { connect(address, code) }
+                            result.onSuccess { (url, token) ->
+                                RomMSettings.save(context, url, token)
+                                onConnect()
+                            }.onFailure { message = it.message ?: it.toString() }
+                        } else {
+                            val result = withContext(Dispatchers.IO) { beginPairing(context, address) }
+                            result.onSuccess {
+                                pairing = it
+                                message = ""
+                            }.onFailure { message = it.message ?: it.toString() }
+                        }
+                        busy = false
+                    }
+                },
+            )
+            GameButton(
+                label = stringResource(if (manual) R.string.game_romm_use_device else R.string.game_romm_use_code),
+                modifier = Modifier.width(300.dp),
+                onClick = { manual = !manual },
+            )
+        }
+        if (message.isNotEmpty()) Text(message, color = GameColors.textDim, fontSize = 14.sp)
+    }
+}
+
+/** Mostra o código e espera a aprovação no navegador; avisa quando aprovado, negado ou expirado. */
+@Composable
+private fun PairingWait(pairing: DevicePairing, onApprove: (String) -> Unit, onFail: (String) -> Unit, onCancel: () -> Unit) {
+    val context = LocalContext.current
+    LaunchedEffect(pairing.deviceCode) {
+        val client = RomMClient(pairing.baseUrl, null)
+        var intervalMs = pairing.intervalSeconds.coerceAtLeast(1) * 1000L
+        val deadline = System.currentTimeMillis() + pairing.expiresInSeconds * 1000L
+        while (System.currentTimeMillis() < deadline) {
+            delay(intervalMs)
+            when (val result = withContext(Dispatchers.IO) { client.pollDevicePairing(pairing.deviceCode) }) {
+                is DevicePoll.Approved -> return@LaunchedEffect onApprove(result.token)
+                DevicePoll.Denied -> return@LaunchedEffect onFail(context.getString(R.string.game_romm_pair_denied))
+                DevicePoll.Expired -> return@LaunchedEffect onFail(context.getString(R.string.game_romm_pair_expired))
+                is DevicePoll.Failed -> return@LaunchedEffect onFail(result.message)
+                DevicePoll.SlowDown -> intervalMs = (intervalMs + 5_000L).coerceAtMost(30_000L)
+                DevicePoll.Pending -> Unit
+            }
+        }
+        onFail(context.getString(R.string.game_romm_pair_expired))
+    }
+    val openFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { openFocus.requestFocus() } }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 40.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(stringResource(R.string.game_romm_title), color = GameColors.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.game_romm_pair_code, pairing.userCode), color = GameColors.accent, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.game_romm_pair_steps), color = GameColors.textDim, fontSize = 14.sp)
+        Text(pairing.verificationUrl, color = GameColors.textDim, fontSize = 12.sp)
         GameButton(
-            label = stringResource(R.string.game_romm_connect),
-            enabled = !busy && address.isNotBlank() && code.isNotBlank(),
+            label = stringResource(R.string.game_romm_open_browser),
             primary = true,
-            modifier = Modifier.width(220.dp),
+            modifier = Modifier.width(320.dp).focusRequester(openFocus),
             onClick = {
-                scope.launch {
-                    busy = true
-                    message = context.getString(R.string.game_romm_connecting)
-                    val result = withContext(Dispatchers.IO) { connect(address, code) }
-                    result.onSuccess { (url, token) ->
-                        RomMSettings.save(context, url, token)
-                        onConnect()
-                    }.onFailure { message = it.message ?: it.toString() }
-                    busy = false
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(pairing.verificationUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 }
             },
         )
-        if (message.isNotEmpty()) Text(message, color = GameColors.textDim, fontSize = 14.sp)
+        Text(stringResource(R.string.game_romm_pair_wait), color = GameColors.textDim, fontSize = 14.sp)
+        GameButton(label = stringResource(R.string.game_romm_pair_cancel), onClick = onCancel, modifier = Modifier.width(220.dp))
     }
+}
+
+/** Testa https e depois http quando o endereço vem sem protocolo e pede o código de aprovação. */
+private fun beginPairing(context: Context, address: String): Result<DevicePairing> = runCatching {
+    val typed = address.trim().trimEnd('/')
+    val candidates = if ("://" in typed) listOf(typed) else listOf("https://$typed", "http://$typed")
+    var lastError: Throwable? = null
+    for (candidate in candidates) {
+        try {
+            val client = RomMClient(candidate, null)
+            if (!client.heartbeat()) {
+                lastError = IllegalStateException("Não consegui falar com o servidor em $candidate")
+                continue
+            }
+            @Suppress("HardwareIds")
+            val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+            val clientId = "tandem-${androidId ?: java.util.UUID.randomUUID()}"
+            val name = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
+            return@runCatching client.beginDevicePairing(clientId, name, "1.0")
+        } catch (e: Exception) {
+            lastError = e
+        }
+    }
+    throw lastError ?: IllegalStateException("Falha ao conectar")
 }
 
 /** Testa https e depois http quando o endereço vem sem protocolo; devolve (endereço, token). */

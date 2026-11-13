@@ -33,6 +33,25 @@ enum class RemoteFileKind(val path: String, val part: String) {
 
 data class RemoteFile(val id: Long, val emulator: String?, val updatedAtMs: Long)
 
+/** Pedido de aprovação do aparelho: o usuário confirma o código no RomM, pelo navegador. */
+data class DevicePairing(
+    val baseUrl: String,
+    val deviceCode: String,
+    val userCode: String,
+    val verificationUrl: String,
+    val expiresInSeconds: Int,
+    val intervalSeconds: Int,
+)
+
+sealed class DevicePoll {
+    data object Pending : DevicePoll()
+    data object SlowDown : DevicePoll()
+    data object Denied : DevicePoll()
+    data object Expired : DevicePoll()
+    data class Approved(val token: String) : DevicePoll()
+    data class Failed(val message: String) : DevicePoll()
+}
+
 /** Endereço do servidor e token, guardados só neste aparelho. */
 object RomMSettings {
 
@@ -94,6 +113,59 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
             }
             return JSONObject(response.body.string()).getString("raw_token")
         }
+    }
+
+    /** Pede ao servidor um código de aprovação (fluxo de dispositivo, como TV): o login é feito no navegador. */
+    fun beginDevicePairing(clientId: String, deviceName: String, version: String): DevicePairing {
+        val body = JSONObject()
+            .put("client_device_identifier", clientId)
+            .put("name", deviceName)
+            .put("client", "tandem")
+            .put("platform", "Android")
+            .put("client_version", version)
+            .put("requested_scopes", org.json.JSONArray(DEVICE_SCOPES))
+            .toString()
+            .toRequestBody("application/json".toMediaType())
+        val request = request(base.resolve("api/auth/device/init")!!).post(body).build()
+        http.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException(
+                    if (response.code == 404) "Esta versão do RomM não permite aprovar pelo aparelho; use o código de pareamento" else "Falha ao iniciar o pareamento (${response.code})",
+                )
+            }
+            val json = JSONObject(response.body.string())
+            val path = json.getString("verification_path_complete")
+            val link = if (path.startsWith("http")) path else base.resolve(path.trimStart('/'))?.toString() ?: path
+            return DevicePairing(
+                baseUrl = baseUrl.trimEnd('/'),
+                deviceCode = json.getString("device_code"),
+                userCode = json.getString("user_code"),
+                verificationUrl = link,
+                expiresInSeconds = json.optInt("expires_in", 600),
+                intervalSeconds = json.optInt("interval", 5),
+            )
+        }
+    }
+
+    /** Pergunta se o usuário já aprovou. Erros de rede passageiros contam como "ainda pendente". */
+    fun pollDevicePairing(deviceCode: String): DevicePoll = try {
+        val body = JSONObject().put("device_code", deviceCode).toString().toRequestBody("application/json".toMediaType())
+        http.newCall(request(base.resolve("api/auth/device/token")!!).post(body).build()).execute().use { response ->
+            val text = response.body.string()
+            if (response.isSuccessful) {
+                DevicePoll.Approved(JSONObject(text).getString("access_token"))
+            } else {
+                when (runCatching { JSONObject(text).optString("detail") }.getOrDefault("")) {
+                    "authorization_pending" -> DevicePoll.Pending
+                    "slow_down" -> DevicePoll.SlowDown
+                    "access_denied" -> DevicePoll.Denied
+                    "expired_token" -> DevicePoll.Expired
+                    else -> DevicePoll.Failed("Pareamento falhou (${response.code})")
+                }
+            }
+        }
+    } catch (_: IOException) {
+        DevicePoll.Pending
     }
 
     /** Todos os jogos do servidor cuja plataforma o motor sabe jogar e que são um arquivo só. */
@@ -234,5 +306,17 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
 
     private companion object {
         const val PAGE_SIZE = 100
+        val DEVICE_SCOPES = listOf(
+            "me.read",
+            "platforms.read",
+            "roms.read",
+            "roms.user.read",
+            "roms.user.write",
+            "assets.read",
+            "assets.write",
+            "firmware.read",
+            "devices.read",
+            "devices.write",
+        )
     }
 }
