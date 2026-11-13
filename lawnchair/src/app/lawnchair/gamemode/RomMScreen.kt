@@ -217,48 +217,43 @@ private fun PairingWait(pairing: DevicePairing, onApprove: (String) -> Unit, onF
     }
 }
 
-/** Testa https e depois http quando o endereço vem sem protocolo e pede o código de aprovação. */
-private fun beginPairing(context: Context, address: String): Result<DevicePairing> = runCatching {
+/** Endereços a testar: com protocolo digitado só ele; sem protocolo, http primeiro para IP/rede local, https primeiro para nomes. */
+private fun candidateUrls(address: String): List<String> {
     val typed = address.trim().trimEnd('/')
-    val candidates = if ("://" in typed) listOf(typed) else listOf("https://$typed", "http://$typed")
-    var lastError: Throwable? = null
-    for (candidate in candidates) {
-        try {
-            val client = RomMClient(candidate, null)
-            if (!client.heartbeat()) {
-                lastError = IllegalStateException("Não consegui falar com o servidor em $candidate")
-                continue
-            }
-            @Suppress("HardwareIds")
-            val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-            val clientId = "tandem-${androidId ?: java.util.UUID.randomUUID()}"
-            val name = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
-            return@runCatching client.beginDevicePairing(clientId, name, "1.0")
-        } catch (e: Exception) {
-            lastError = e
-        }
-    }
-    throw lastError ?: IllegalStateException("Falha ao conectar")
+    if ("://" in typed) return listOf(typed)
+    val host = typed.substringBefore('/').substringBefore(':')
+    val local = host.matches(Regex("""\d{1,3}(\.\d{1,3}){3}""")) || host == "localhost" || host.endsWith(".local") || '.' !in host
+    return if (local) listOf("http://$typed", "https://$typed") else listOf("https://$typed", "http://$typed")
 }
 
-/** Testa https e depois http quando o endereço vem sem protocolo; devolve (endereço, token). */
-private fun connect(address: String, code: String): Result<Pair<String, String>> = runCatching {
-    val typed = address.trim().trimEnd('/')
-    val candidates = if ("://" in typed) listOf(typed) else listOf("https://$typed", "http://$typed")
-    var lastError: Throwable? = null
-    for (candidate in candidates) {
-        try {
-            val client = RomMClient(candidate, null)
-            if (!client.heartbeat()) {
-                lastError = IllegalStateException("Não consegui falar com o servidor em $candidate")
-                continue
-            }
-            return@runCatching candidate to client.exchangePairingCode(code)
-        } catch (e: Exception) {
-            lastError = e
+/** Primeiro endereço que responde; se nenhum responder, o erro lista o motivo de cada tentativa. */
+private fun reachable(address: String): RomMClient {
+    val problems = mutableListOf<String>()
+    for (candidate in candidateUrls(address)) {
+        val client = runCatching { RomMClient(candidate, null) }.getOrElse {
+            problems += "$candidate: endereço inválido"
+            continue
         }
+        val problem = client.checkServer() ?: return client
+        problems += "$candidate: $problem"
     }
-    throw lastError ?: IllegalStateException("Falha ao conectar")
+    throw IllegalStateException("Não consegui falar com o servidor. ${problems.joinToString("; ")}")
+}
+
+/** Acha o servidor e pede o código de aprovação. */
+private fun beginPairing(context: Context, address: String): Result<DevicePairing> = runCatching {
+    val client = reachable(address)
+    @Suppress("HardwareIds")
+    val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+    val clientId = "tandem-${androidId ?: java.util.UUID.randomUUID()}"
+    val name = "${Build.MANUFACTURER} ${Build.MODEL}".trim()
+    client.beginDevicePairing(clientId, name, "1.0")
+}
+
+/** Acha o servidor e troca o código de pareamento por um token; devolve (endereço, token). */
+private fun connect(address: String, code: String): Result<Pair<String, String>> = runCatching {
+    val client = reachable(address)
+    client.baseAddress to client.exchangePairingCode(code)
 }
 
 @Composable

@@ -83,6 +83,8 @@ object RomMSettings {
  */
 class RomMClient(private val baseUrl: String, private val token: String?) {
 
+    val baseAddress: String get() = baseUrl.trimEnd('/')
+
     private val http = OkHttpClient()
     private val base: HttpUrl = baseUrl.trimEnd('/').plus("/").toHttpUrl()
 
@@ -93,9 +95,16 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
         return builder
     }
 
-    fun heartbeat(): Boolean = runCatching {
-        http.newCall(request(base.resolve("api/heartbeat")!!).build()).execute().use { it.isSuccessful }
-    }.getOrDefault(false)
+    fun heartbeat(): Boolean = checkServer() == null
+
+    /** Testa se o servidor responde; devolve nulo se está tudo bem ou o motivo da falha em palavras. */
+    fun checkServer(): String? = try {
+        http.newCall(request(base.resolve("api/heartbeat")!!).build()).execute().use { response ->
+            if (response.isSuccessful) null else "o servidor respondeu ${response.code}"
+        }
+    } catch (e: IOException) {
+        e.message?.let { "${e.javaClass.simpleName}: $it" } ?: e.javaClass.simpleName
+    }
 
     /** Troca o código de pareamento gerado no RomM por um token de cliente. */
     fun exchangePairingCode(code: String): String {
