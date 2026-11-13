@@ -52,7 +52,7 @@ internal fun ServerScreen(rootPath: String, onLibraryChange: () -> Unit) {
     val context = LocalContext.current
     var connected by remember { mutableStateOf(RomMSettings.isConnected(context)) }
     if (!connected) {
-        ConnectForm(onConnected = { connected = true })
+        ConnectForm(onConnect = { connected = true })
     } else {
         ServerLibrary(
             rootPath = rootPath,
@@ -66,7 +66,7 @@ internal fun ServerScreen(rootPath: String, onLibraryChange: () -> Unit) {
 }
 
 @Composable
-private fun ConnectForm(onConnected: () -> Unit) {
+private fun ConnectForm(onConnect: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var address by remember { mutableStateOf("") }
@@ -108,7 +108,7 @@ private fun ConnectForm(onConnected: () -> Unit) {
                     val result = withContext(Dispatchers.IO) { connect(address, code) }
                     result.onSuccess { (url, token) ->
                         RomMSettings.save(context, url, token)
-                        onConnected()
+                        onConnect()
                     }.onFailure { message = it.message ?: it.toString() }
                     busy = false
                 }
