@@ -196,10 +196,12 @@ class GameSessionActivity : ComponentActivity() {
             return when (event.keyCode) {
                 // No menu, A confirma e B fecha, como em qualquer console.
                 KeyEvent.KEYCODE_BUTTON_A -> super.dispatchKeyEvent(KeyEvent(event.action, KeyEvent.KEYCODE_DPAD_CENTER))
+
                 KeyEvent.KEYCODE_BUTTON_B -> {
                     if (event.action == KeyEvent.ACTION_UP) setMenu(false)
                     true
                 }
+
                 else -> super.dispatchKeyEvent(event)
             }
         }
