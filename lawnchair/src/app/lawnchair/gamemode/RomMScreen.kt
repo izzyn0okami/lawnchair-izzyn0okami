@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
@@ -170,6 +171,8 @@ private fun ConnectForm(onConnect: () -> Unit) {
 @Composable
 private fun PairingWait(pairing: DevicePairing, onApprove: (String) -> Unit, onFail: (String) -> Unit, onCancel: () -> Unit) {
     val context = LocalContext.current
+    val latestApprove by rememberUpdatedState(onApprove)
+    val latestFail by rememberUpdatedState(onFail)
     LaunchedEffect(pairing.deviceCode) {
         val client = RomMClient(pairing.baseUrl, null)
         var intervalMs = pairing.intervalSeconds.coerceAtLeast(1) * 1000L
@@ -177,15 +180,15 @@ private fun PairingWait(pairing: DevicePairing, onApprove: (String) -> Unit, onF
         while (System.currentTimeMillis() < deadline) {
             delay(intervalMs)
             when (val result = withContext(Dispatchers.IO) { client.pollDevicePairing(pairing.deviceCode) }) {
-                is DevicePoll.Approved -> return@LaunchedEffect onApprove(result.token)
-                DevicePoll.Denied -> return@LaunchedEffect onFail(context.getString(R.string.game_romm_pair_denied))
-                DevicePoll.Expired -> return@LaunchedEffect onFail(context.getString(R.string.game_romm_pair_expired))
-                is DevicePoll.Failed -> return@LaunchedEffect onFail(result.message)
+                is DevicePoll.Approved -> return@LaunchedEffect latestApprove(result.token)
+                DevicePoll.Denied -> return@LaunchedEffect latestFail(context.getString(R.string.game_romm_pair_denied))
+                DevicePoll.Expired -> return@LaunchedEffect latestFail(context.getString(R.string.game_romm_pair_expired))
+                is DevicePoll.Failed -> return@LaunchedEffect latestFail(result.message)
                 DevicePoll.SlowDown -> intervalMs = (intervalMs + 5_000L).coerceAtMost(30_000L)
                 DevicePoll.Pending -> Unit
             }
         }
-        onFail(context.getString(R.string.game_romm_pair_expired))
+        latestFail(context.getString(R.string.game_romm_pair_expired))
     }
     val openFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { openFocus.requestFocus() } }
