@@ -4,25 +4,20 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,9 +29,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.lawnchair.ui.theme.EdgeToEdge
 import app.lawnchair.ui.theme.LawnchairTheme
 import com.android.launcher3.R
@@ -46,9 +44,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Superfície do modo jogos (M3, passo 1): pasta de jogos configurável, varredura que reconhece
- * jogos baixados e colocados à mão, e lista simples para jogar. A interface final (estilo SteamOS)
- * vem depois dos mockups.
+ * Modo jogos: biblioteca (pasta configurável, jogos baixados e colocados à mão), destaque de
+ * "continuar jogando", recentes, filtro por plataforma, detalhe do jogo e ajustes.
+ * Visual segue os mockups aprovados (estilo SteamOS), navegação só por controle físico.
  */
 class GameModeActivity : ComponentActivity() {
 
@@ -60,9 +58,7 @@ class GameModeActivity : ComponentActivity() {
         setContent {
             LawnchairTheme {
                 EdgeToEdge()
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    GameModeScreen(refreshKey = resumeTick, onExit = { finish() })
-                }
+                GameModeRoot(refreshKey = resumeTick, onExit = { finish() })
             }
         }
     }
@@ -77,39 +73,50 @@ class GameModeActivity : ComponentActivity() {
     }
 }
 
+private enum class GameTab(val label: Int) {
+    Library(R.string.game_tab_library),
+    Server(R.string.game_tab_server),
+    Achievements(R.string.game_tab_achievements),
+    Settings(R.string.game_tab_settings),
+}
+
 @Composable
-private fun GameModeScreen(refreshKey: Int, onExit: () -> Unit) {
+private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var autoEnter by remember { mutableStateOf(GameModeSettings.isAutoEnterEnabled(context)) }
+    var tab by remember { mutableStateOf(GameTab.Library) }
+    var detail by remember { mutableStateOf<LocalGame?>(null) }
     var status by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var rootPath by remember { mutableStateOf(GameLibrarySettings.rootPath(context)) }
     var games by remember { mutableStateOf(emptyList<LocalGame>()) }
     var hasAccess by remember { mutableStateOf(StorageAccess.isGranted()) }
     var scanTick by remember { mutableIntStateOf(0) }
+    var version by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(refreshKey, scanTick, rootPath) {
         hasAccess = StorageAccess.isGranted()
         games = withContext(Dispatchers.IO) { GameLibraryScanner.scan(File(rootPath)) }
+        version++
     }
 
-    fun play(corePathProvider: suspend () -> File, romPath: String, title: String) {
-        scope.launch {
-            busy = true
-            runCatching {
-                val core = corePathProvider()
-                status = context.getString(R.string.game_mode_status_starting, title)
-                context.startActivity(GameSessionActivity.intent(context, core.absolutePath, romPath))
-            }.onFailure { status = context.getString(R.string.game_mode_status_error, it.message ?: it.toString()) }
-            busy = false
-        }
-    }
+    BackHandler(enabled = detail != null) { detail = null }
 
-    fun installCore(coreId: String): suspend () -> File = {
-        CoreInstaller.ensureInstalled(context, coreId) { bytes ->
+    suspend fun startGame(coreId: String, romPath: String, title: String, loadState: Boolean) {
+        val core = CoreInstaller.ensureInstalled(context, coreId) { bytes ->
             status = context.getString(R.string.game_mode_status_downloading, coreId, bytes / 1024)
         }.getOrThrow()
+        status = context.getString(R.string.game_mode_status_starting, title)
+        context.startActivity(GameSessionActivity.intent(context, core.absolutePath, romPath, loadState))
+    }
+
+    fun play(game: LocalGame, loadState: Boolean = false) {
+        scope.launch {
+            busy = true
+            runCatching { startGame(game.platform.coreId, game.path, game.title, loadState) }
+                .onFailure { status = context.getString(R.string.game_mode_status_error, it.message ?: it.toString()) }
+            busy = false
+        }
     }
 
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -134,9 +141,7 @@ private fun GameModeScreen(refreshKey: Int, onExit: () -> Unit) {
                 val coreId = checkNotNull(RomLauncher.coreFor(rom.name)) {
                     context.getString(R.string.game_mode_status_unsupported, rom.name)
                 }
-                val core = installCore(coreId)()
-                status = context.getString(R.string.game_mode_status_starting, rom.name)
-                context.startActivity(GameSessionActivity.intent(context, core.absolutePath, rom.absolutePath))
+                startGame(coreId, rom.absolutePath, rom.name, false)
             }.onFailure { status = context.getString(R.string.game_mode_status_error, it.message ?: it.toString()) }
             busy = false
         }
@@ -147,96 +152,123 @@ private fun GameModeScreen(refreshKey: Int, onExit: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .systemBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .background(Brush.verticalGradient(listOf(GameColors.backgroundTop, GameColors.background)))
+            .systemBarsPadding(),
     ) {
-        Text(
-            text = stringResource(R.string.game_mode_title),
-            style = MaterialTheme.typography.headlineLarge,
-        )
-        Text(
-            text = stringResource(R.string.game_mode_folder_label, rootPath),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { folderPicker.launch(null) }) {
-                Text(text = stringResource(R.string.game_mode_choose_folder))
-            }
-            OutlinedButton(onClick = { scanTick++ }) {
-                Text(text = stringResource(R.string.game_mode_refresh))
-            }
+        val current = detail
+        if (current == null) {
+            TopBar(selected = tab, onSelect = { tab = it })
         }
-        if (needsAccess) {
-            Text(
-                text = stringResource(R.string.game_mode_needs_access),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-            Button(onClick = { context.startActivity(StorageAccess.settingsIntent(context)) }) {
-                Text(text = stringResource(R.string.game_mode_grant_access))
+        Box(modifier = Modifier.weight(1f)) {
+            when {
+                current != null -> GameDetailScreen(
+                    game = current,
+                    busy = busy,
+                    onPlay = { play(current) },
+                    onLoad = { play(current, loadState = true) },
+                    onBack = { detail = null },
+                )
+
+                tab == GameTab.Library -> LibraryScreen(
+                    games = games,
+                    version = version,
+                    busy = busy,
+                    onPlay = { play(it) },
+                    onDetails = { detail = it },
+                )
+
+                tab == GameTab.Settings -> SettingsScreen(
+                    rootPath = rootPath,
+                    needsAccess = needsAccess,
+                    busy = busy,
+                    onChooseFolder = { folderPicker.launch(null) },
+                    onRefresh = { scanTick++ },
+                    onGrantAccess = { context.startActivity(StorageAccess.settingsIntent(context)) },
+                    onPickRom = { romPicker.launch(arrayOf("*/*")) },
+                    onExit = onExit,
+                )
+
+                tab == GameTab.Server -> ComingSoon(stringResource(R.string.game_soon_server))
+
+                else -> ComingSoon(stringResource(R.string.game_soon_achievements))
             }
         }
         if (status.isNotEmpty()) {
-            Text(text = status, style = MaterialTheme.typography.bodyMedium)
-        }
-        if (games.isEmpty()) {
             Text(
-                text = stringResource(R.string.game_mode_empty_library),
-                style = MaterialTheme.typography.bodyLarge,
+                text = status,
+                color = GameColors.textDim,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(horizontal = 40.dp, vertical = 6.dp),
             )
         }
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            games.groupBy { it.platform }.forEach { (platform, platformGames) ->
-                item(key = "header-${platform.slug}") {
-                    Text(
-                        text = "${platform.name} (${platformGames.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-                    )
-                }
-                items(platformGames, key = { it.path }) { game ->
-                    Text(
-                        text = game.title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = !busy) {
-                                play(installCore(game.platform.coreId), game.path, game.title)
-                            }
-                            .padding(vertical = 10.dp),
-                    )
-                }
+        HintBar(inDetail = current != null)
+    }
+}
+
+@Composable
+private fun TopBar(selected: GameTab, onSelect: (GameTab) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 40.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = "Tandem",
+            color = GameColors.text,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(end = 16.dp),
+        )
+        GameTab.entries.forEach { entry ->
+            FocusSurface(
+                onClick = { onSelect(entry) },
+                background = if (entry == selected) GameColors.surfaceHigh else GameColors.background.copy(alpha = 0f),
+            ) {
+                Text(
+                    text = stringResource(entry.label),
+                    color = if (entry == selected) GameColors.text else GameColors.textDim,
+                    fontSize = 15.sp,
+                    fontWeight = if (entry == selected) FontWeight.SemiBold else FontWeight.Normal,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                )
             }
         }
-        OutlinedButton(
-            enabled = !busy,
-            onClick = { romPicker.launch(arrayOf("*/*")) },
-        ) {
-            Text(text = stringResource(R.string.game_mode_play_rom))
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.game_mode_auto_enter),
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            Switch(
-                checked = autoEnter,
-                onCheckedChange = {
-                    autoEnter = it
-                    GameModeSettings.setAutoEnterEnabled(context, it)
-                },
-            )
-        }
-        Button(onClick = onExit) {
-            Text(text = stringResource(R.string.game_mode_exit))
-        }
+    }
+}
+
+@Composable
+private fun ComingSoon(message: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(40.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(text = stringResource(R.string.game_soon), color = GameColors.text, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text(text = message, color = GameColors.textDim, fontSize = 16.sp)
+    }
+}
+
+@Composable
+private fun HintBar(inDetail: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(GameColors.bar)
+            .padding(horizontal = 40.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(28.dp),
+    ) {
+        Hint("A", stringResource(if (inDetail) R.string.game_play else R.string.game_hint_select))
+        Hint("B", stringResource(R.string.game_hint_back))
+    }
+}
+
+@Composable
+private fun Hint(button: String, label: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(text = button, color = GameColors.text, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Text(text = label, color = GameColors.textDim, fontSize = 14.sp)
     }
 }

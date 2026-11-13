@@ -3,6 +3,7 @@ package app.lawnchair.gamemode
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -14,12 +15,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,14 +27,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -48,6 +48,7 @@ import com.swordfish.libretrodroid.GLRetroViewData
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -63,12 +64,15 @@ class GameSessionActivity : ComponentActivity() {
     private var menuOpen by mutableStateOf(false)
     private var selectDown = false
     private var startDown = false
+    private var resumedAtMs = 0L
+    private var romPath: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val corePath = intent.getStringExtra(EXTRA_CORE_PATH)
         val romPath = intent.getStringExtra(EXTRA_ROM_PATH)
+        this.romPath = romPath
         if (corePath == null || romPath == null) {
             finish()
             return
@@ -104,6 +108,7 @@ class GameSessionActivity : ComponentActivity() {
                     LawnchairTheme {
                         if (menuOpen) {
                             PauseMenu(
+                                title = File(romPath).nameWithoutExtension,
                                 canLoad = store.hasState(),
                                 onResume = { setMenu(false) },
                                 onSave = { saveQuickState() },
@@ -132,6 +137,13 @@ class GameSessionActivity : ComponentActivity() {
             view.getGLRetroErrors().collect { code ->
                 Toast.makeText(this@GameSessionActivity, getString(R.string.game_session_engine_error, code), Toast.LENGTH_LONG).show()
                 finish()
+            }
+        }
+
+        if (intent.getBooleanExtra(EXTRA_LOAD_STATE, false) && store.hasState()) {
+            lifecycleScope.launch {
+                view.getGLRetroEvents().first { it is GLRetroView.GLRetroEvents.FrameRendered }
+                loadQuickState()
             }
         }
 
@@ -183,9 +195,19 @@ class GameSessionActivity : ComponentActivity() {
 
     private fun toast(message: Int) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 
+    override fun onResume() {
+        super.onResume()
+        resumedAtMs = SystemClock.elapsedRealtime()
+    }
+
     override fun onPause() {
         // Antes do super: a superfície de vídeo ainda está ativa e consegue entregar o save.
         persistSram()
+        romPath?.let {
+            val elapsed = SystemClock.elapsedRealtime() - resumedAtMs
+            if (resumedAtMs > 0) PlayHistory.addSession(this, it, elapsed, System.currentTimeMillis())
+        }
+        resumedAtMs = 0L
         super.onPause()
     }
 
@@ -239,16 +261,19 @@ class GameSessionActivity : ComponentActivity() {
     companion object {
         private const val EXTRA_CORE_PATH = "core_path"
         private const val EXTRA_ROM_PATH = "rom_path"
+        private const val EXTRA_LOAD_STATE = "load_state"
         private const val SRAM_AUTOSAVE_MS = 60_000L
 
-        fun intent(context: Context, corePath: String, romPath: String): Intent = Intent(context, GameSessionActivity::class.java)
+        fun intent(context: Context, corePath: String, romPath: String, loadState: Boolean = false): Intent = Intent(context, GameSessionActivity::class.java)
             .putExtra(EXTRA_CORE_PATH, corePath)
             .putExtra(EXTRA_ROM_PATH, romPath)
+            .putExtra(EXTRA_LOAD_STATE, loadState)
     }
 }
 
 @Composable
 private fun PauseMenu(
+    title: String,
     canLoad: Boolean,
     onResume: () -> Unit,
     onSave: () -> Unit,
@@ -258,36 +283,35 @@ private fun PauseMenu(
 ) {
     val firstItem = remember { FocusRequester() }
     LaunchedEffect(Unit) { firstItem.requestFocus() }
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xCC000000)),
-        contentAlignment = Alignment.Center,
-    ) {
+    Box(modifier = Modifier.fillMaxSize().background(GameColors.scrim)) {
         Column(
-            modifier = Modifier.width(300.dp),
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(380.dp)
+                .background(GameColors.panel)
+                .padding(horizontal = 32.dp, vertical = 40.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = stringResource(R.string.game_session_menu_title),
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color.White,
+                text = stringResource(R.string.game_session_paused).uppercase(),
+                color = GameColors.textDim,
+                fontSize = 13.sp,
             )
-            Button(onClick = onResume, modifier = Modifier.fillMaxWidth().focusRequester(firstItem)) {
-                Text(text = stringResource(R.string.game_session_resume))
-            }
-            OutlinedButton(onClick = onSave, modifier = Modifier.fillMaxWidth()) {
-                Text(text = stringResource(R.string.game_session_save_state))
-            }
-            OutlinedButton(onClick = onLoad, enabled = canLoad, modifier = Modifier.fillMaxWidth()) {
-                Text(text = stringResource(R.string.game_session_load_state))
-            }
-            OutlinedButton(onClick = onReset, modifier = Modifier.fillMaxWidth()) {
-                Text(text = stringResource(R.string.game_session_reset))
-            }
-            OutlinedButton(onClick = onExit, modifier = Modifier.fillMaxWidth()) {
-                Text(text = stringResource(R.string.game_session_exit))
-            }
+            Text(
+                text = title,
+                color = GameColors.text,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                modifier = Modifier.padding(bottom = 16.dp),
+            )
+            GameButton(stringResource(R.string.game_session_resume), onResume, primary = true, modifier = Modifier.focusRequester(firstItem))
+            GameButton(stringResource(R.string.game_session_save_state), onSave)
+            GameButton(stringResource(R.string.game_session_load_state), onLoad, enabled = canLoad)
+            GameButton(stringResource(R.string.game_session_reset), onReset)
+            GameButton(stringResource(R.string.game_session_exit), onExit, danger = true, modifier = Modifier.padding(top = 12.dp))
+            Spacer(Modifier.weight(1f))
+            Text(text = stringResource(R.string.game_session_autosave_note), color = GameColors.textDim, fontSize = 13.sp)
         }
     }
 }
