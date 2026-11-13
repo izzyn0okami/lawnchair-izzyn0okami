@@ -53,7 +53,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Sessão de jogo: roda um núcleo Libretro em tela cheia dentro do próprio APK.
- * M3: save de bateria automático, estado rápido e menu de pausa (Voltar ou botão Mode do controle).
+ * M3: save de bateria automático, estado rápido e menu de pausa (Voltar, botão Mode ou Select + Start).
  * Roda no mesmo processo do launcher; separar em processo próprio fica para depois.
  */
 class GameSessionActivity : ComponentActivity() {
@@ -61,6 +61,8 @@ class GameSessionActivity : ComponentActivity() {
     private var retroView: GLRetroView? = null
     private var saveStore: SaveStore? = null
     private var menuOpen by mutableStateOf(false)
+    private var selectDown = false
+    private var startDown = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -188,6 +190,18 @@ class GameSessionActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Controles sem botão Mode (a maioria dos genéricos): Select + Start juntos abrem o menu.
+        val isDown = event.action == KeyEvent.ACTION_DOWN
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_BUTTON_SELECT -> selectDown = isDown || (event.action != KeyEvent.ACTION_UP && selectDown)
+            KeyEvent.KEYCODE_BUTTON_START -> startDown = isDown || (event.action != KeyEvent.ACTION_UP && startDown)
+        }
+        if (isDown && event.repeatCount == 0 && selectDown && startDown &&
+            (event.keyCode == KeyEvent.KEYCODE_BUTTON_SELECT || event.keyCode == KeyEvent.KEYCODE_BUTTON_START)
+        ) {
+            setMenu(!menuOpen)
+            return true
+        }
         if (event.keyCode == KeyEvent.KEYCODE_BUTTON_MODE) {
             if (event.action == KeyEvent.ACTION_UP) setMenu(!menuOpen)
             return true
