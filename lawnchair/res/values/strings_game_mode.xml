@@ -76,4 +76,9 @@
     <string name="game_romm_downloading">Baixando %1$d%%</string>
     <string name="game_romm_downloaded">Baixado</string>
     <string name="game_mode_status_syncing">Sincronizando saves com o servidor…</string>
+    <string name="game_android">Jogos Android</string>
+    <string name="game_pad_disconnected_title">Controle desconectado</string>
+    <string name="game_pad_disconnected_body">Quer continuar no modo jogos ou voltar ao launcher?</string>
+    <string name="game_pad_stay">Continuar aqui</string>
+    <string name="game_session_pad_disconnected">Controle desconectado: jogo pausado</string>
 </resources>

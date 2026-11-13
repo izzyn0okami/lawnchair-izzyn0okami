@@ -1,5 +1,6 @@
 package app.lawnchair.gamemode
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -31,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +43,8 @@ import com.android.launcher3.R
 import java.io.File
 import java.text.DateFormat
 import java.util.Date
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val CARD_SIZE = 140.dp
 private val CARD_GAP = 14.dp
@@ -47,10 +52,12 @@ private val CARD_GAP = 14.dp
 @Composable
 internal fun LibraryScreen(
     games: List<LocalGame>,
+    androidGames: List<AndroidGame>,
     version: Int,
     busy: Boolean,
     onPlay: (LocalGame) -> Unit,
     onDetails: (LocalGame) -> Unit,
+    onLaunchAndroid: (AndroidGame) -> Unit,
 ) {
     val context = LocalContext.current
     val recent = remember(version) { PlayHistory.recent(context, games).take(10) }
@@ -59,13 +66,15 @@ internal fun LibraryScreen(
     val visible = remember(games, platformFilter) {
         if (platformFilter == null) games else games.filter { it.platform.slug == platformFilter }
     }
+    val androidSorted = remember(androidGames, version) { AndroidGames.sortedByRecent(context, androidGames) }
+    val showAndroid = platformFilter == null || platformFilter == ANDROID_FILTER
     val hero = recent.firstOrNull() ?: games.firstOrNull()
     val heroFocus = remember { FocusRequester() }
     LaunchedEffect(hero?.path) {
         if (hero != null) runCatching { heroFocus.requestFocus() }
     }
 
-    if (games.isEmpty()) {
+    if (games.isEmpty() && androidGames.isEmpty()) {
         Column(modifier = Modifier.fillMaxSize().padding(40.dp)) {
             Text(
                 text = stringResource(R.string.game_mode_empty_library),
@@ -117,15 +126,55 @@ internal fun LibraryScreen(
                         items(platforms, key = { it.slug }) { platform ->
                             PlatformChip(platform.name, platformFilter == platform.slug) { platformFilter = platform.slug }
                         }
+                        if (androidGames.isNotEmpty()) {
+                            item(key = ANDROID_FILTER) {
+                                PlatformChip(stringResource(R.string.game_android), platformFilter == ANDROID_FILTER) { platformFilter = ANDROID_FILTER }
+                            }
+                        }
                     }
                 }
             }
-            item(key = "library-title") { SectionTitle(stringResource(R.string.game_library_section)) }
-            items(visible.chunked(columns), key = { row -> row.first().path }) { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(CARD_GAP)) {
-                    row.forEach { game -> GameCard(game, onClick = { onDetails(game) }) }
+            if (showAndroid && androidSorted.isNotEmpty()) {
+                item(key = "android") {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SectionTitle(stringResource(R.string.game_android))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(CARD_GAP)) {
+                            items(androidSorted, key = { it.packageName }) { game ->
+                                AndroidCard(game, onClick = { onLaunchAndroid(game) })
+                            }
+                        }
+                    }
                 }
             }
+            if (platformFilter != ANDROID_FILTER && visible.isNotEmpty()) {
+                item(key = "library-title") { SectionTitle(stringResource(R.string.game_library_section)) }
+                items(visible.chunked(columns), key = { row -> row.first().path }) { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(CARD_GAP)) {
+                        row.forEach { game -> GameCard(game, onClick = { onDetails(game) }) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private const val ANDROID_FILTER = "android"
+
+@Composable
+private fun AndroidCard(game: AndroidGame, onClick: () -> Unit) {
+    val context = LocalContext.current
+    val icon by produceState<ImageBitmap?>(null, game.packageName) {
+        value = withContext(Dispatchers.IO) { AndroidGames.icon(context, game) }
+    }
+    FocusSurface(onClick = onClick, modifier = Modifier.size(CARD_SIZE)) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            icon?.let { Image(bitmap = it, contentDescription = null, modifier = Modifier.size(72.dp)) }
+                ?: Box(modifier = Modifier.size(72.dp))
+            Text(text = game.title, color = GameColors.text, fontSize = 13.sp, maxLines = 2)
         }
     }
 }

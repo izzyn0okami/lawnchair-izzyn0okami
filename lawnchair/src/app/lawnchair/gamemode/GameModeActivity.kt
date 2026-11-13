@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +31,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -52,6 +56,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 class GameModeActivity : ComponentActivity() {
 
     private var resumeTick by mutableIntStateOf(0)
+    private var padLost by mutableStateOf(false)
+    private val lostWatcher = ControllerLostWatcher(this) {
+        if (GameModeSettings.isAutoEnterEnabled(this)) padLost = true
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,7 +67,12 @@ class GameModeActivity : ComponentActivity() {
         setContent {
             LawnchairTheme {
                 EdgeToEdge()
-                GameModeRoot(refreshKey = resumeTick, onExit = { finish() })
+                Box {
+                    GameModeRoot(refreshKey = resumeTick, onExit = { finish() })
+                    if (padLost) {
+                        PadLostDialog(onStay = { padLost = false }, onLeave = { finish() })
+                    }
+                }
             }
         }
     }
@@ -67,6 +80,12 @@ class GameModeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         resumeTick++
+        lostWatcher.start()
+    }
+
+    override fun onPause() {
+        lostWatcher.stop()
+        super.onPause()
     }
 
     companion object {
@@ -93,6 +112,7 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var rootPath by remember { mutableStateOf(GameLibrarySettings.rootPath(context)) }
     var games by remember { mutableStateOf(emptyList<LocalGame>()) }
+    var androidGames by remember { mutableStateOf(emptyList<AndroidGame>()) }
     var hasAccess by remember { mutableStateOf(StorageAccess.isGranted()) }
     var scanTick by remember { mutableIntStateOf(0) }
     var version by remember { mutableIntStateOf(0) }
@@ -100,6 +120,7 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
     LaunchedEffect(refreshKey, scanTick, rootPath) {
         hasAccess = StorageAccess.isGranted()
         games = withContext(Dispatchers.IO) { GameLibraryScanner.scan(File(rootPath)) }
+        androidGames = withContext(Dispatchers.IO) { AndroidGames.list(context) }
         version++
     }
 
@@ -178,10 +199,16 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
 
                 tab == GameTab.Library -> LibraryScreen(
                     games = games,
+                    androidGames = androidGames,
                     version = version,
                     busy = busy,
                     onPlay = { play(it) },
                     onDetails = { detail = it },
+                    onLaunchAndroid = { game ->
+                        if (!AndroidGames.launch(context, game)) {
+                            status = context.getString(R.string.game_mode_status_error, game.title)
+                        }
+                    },
                 )
 
                 tab == GameTab.Settings -> SettingsScreen(
@@ -209,6 +236,29 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
             )
         }
         HintBar(inDetail = current != null)
+    }
+}
+
+@Composable
+private fun PadLostDialog(onStay: () -> Unit, onLeave: () -> Unit) {
+    val stayFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { stayFocus.requestFocus() } }
+    Box(
+        modifier = Modifier.fillMaxSize().background(GameColors.scrim),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .width(420.dp)
+                .background(GameColors.backgroundTop, RoundedCornerShape(14.dp))
+                .padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(stringResource(R.string.game_pad_disconnected_title), color = GameColors.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.game_pad_disconnected_body), color = GameColors.textDim, fontSize = 15.sp)
+            GameButton(stringResource(R.string.game_pad_stay), onStay, primary = true, modifier = Modifier.focusRequester(stayFocus))
+            GameButton(stringResource(R.string.game_mode_exit), onLeave)
+        }
     }
 }
 

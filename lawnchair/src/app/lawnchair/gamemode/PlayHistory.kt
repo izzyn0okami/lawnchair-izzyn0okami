@@ -30,6 +30,11 @@ object PlayHistory {
         }
     }
 
+    /** Marca só a última vez (jogos Android: o Tandem não vê quanto tempo durou). */
+    fun markPlayed(context: Context, key: String, nowMs: Long) {
+        prefs(context).edit { putLong("last:$key", nowMs) }
+    }
+
     /** Jogos já jogados, do mais recente para o mais antigo. */
     fun recent(context: Context, games: List<LocalGame>): List<LocalGame> = games
         .map { it to get(context, it.path).lastPlayedMs }

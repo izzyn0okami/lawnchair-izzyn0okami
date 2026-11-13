@@ -65,6 +65,12 @@ class GameSessionActivity : ComponentActivity() {
     private var selectDown = false
     private var startDown = false
     private var resumedAtMs = 0L
+    private val lostWatcher = ControllerLostWatcher(this) {
+        if (!menuOpen) {
+            setMenu(true)
+            Toast.makeText(this, R.string.game_session_pad_disconnected, Toast.LENGTH_SHORT).show()
+        }
+    }
     private var romPath: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -198,6 +204,7 @@ class GameSessionActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         resumedAtMs = SystemClock.elapsedRealtime()
+        lostWatcher.start()
     }
 
     override fun onStop() {
@@ -217,6 +224,7 @@ class GameSessionActivity : ComponentActivity() {
             if (resumedAtMs > 0) PlayHistory.addSession(this, it, elapsed, System.currentTimeMillis())
         }
         resumedAtMs = 0L
+        lostWatcher.stop()
         super.onPause()
     }
 
