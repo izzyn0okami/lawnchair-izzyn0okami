@@ -26,10 +26,18 @@ data class RemoteGame(
     val serverName: String = fileName,
     /** Arquivo dentro da pasta do jogo, quando o jogo é uma pasta com um único arquivo jogável. */
     val fileId: Long? = null,
+    /** Jogo de vários arquivos (ex.: cue + bin): baixa a pasta inteira e abre [fileName]. */
+    val folder: Boolean = false,
 ) {
-    /** Pasta de destino dentro da pasta de jogos: uma subpasta por plataforma. */
-    fun destination(root: File): File = File(File(root, platform.slug), fileName)
+    /** Destino dentro da pasta de jogos: uma subpasta por plataforma (e uma pasta por jogo, se for de vários arquivos). */
+    fun destination(root: File): File {
+        val platformDir = File(root, platform.slug)
+        return if (folder) File(File(platformDir, serverName), fileName) else File(platformDir, fileName)
+    }
 }
+
+/** Arquivo de firmware (BIOS) guardado no servidor. */
+data class RemoteFirmware(val id: Long, val fileName: String)
 
 enum class RemoteFileKind(val path: String, val part: String) {
     Save("saves", "saveFile"),
@@ -264,32 +272,38 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
             return null
         }
         val serverName = item.optString("fs_name").ifEmpty { return null }
-        val allowed = platform.extensions + GamePlatforms.genericExtensions
+        val allowed = platform.extensions + if (platform.discBased) emptySet() else GamePlatforms.genericExtensions
         val flat = File(serverName).extension.lowercase() in allowed &&
             !item.optBoolean("has_multiple_files", false) &&
             !item.optBoolean("has_nested_single_file", false)
         var fileName = serverName
         var fileId: Long? = null
+        var folder = false
         if (!flat) {
-            // Jogo guardado numa pasta: precisa haver exatamente um arquivo jogável dentro dela.
             val files = item.optJSONArray("files")
             val playable = (0 until (files?.length() ?: 0)).map { files!!.getJSONObject(it) }.filter {
                 val name = it.optString("file_name")
                 !name.startsWith(".") && File(name).extension.lowercase() in allowed
             }
-            when {
-                playable.isEmpty() -> {
-                    skippedExtension++
-                    return null
-                }
-
-                playable.size > 1 -> {
-                    skippedMulti++
-                    return null
-                }
+            if (playable.isEmpty()) {
+                skippedExtension++
+                return null
             }
-            fileName = playable.single().getString("file_name")
-            fileId = playable.single().getLong("id")
+            val referencing = playable.filter { File(it.getString("file_name")).extension.lowercase() in setOf("cue", "m3u") }
+            if (platform.discBased && (referencing.isNotEmpty() || playable.size > 1)) {
+                // Disco com várias partes (cue + bin, vários discos): baixa a pasta toda e abre a lista ou o primeiro cue.
+                folder = true
+                val names = playable.map { it.getString("file_name") }.sorted()
+                fileName = names.firstOrNull { it.endsWith(".m3u", ignoreCase = true) }
+                    ?: names.singleOrNull()
+                    ?: "${File(serverName).nameWithoutExtension}.m3u"
+            } else if (playable.size > 1) {
+                skippedMulti++
+                return null
+            } else {
+                fileName = playable.single().getString("file_name")
+                fileId = playable.single().getLong("id")
+            }
         }
         return RemoteGame(
             id = item.getLong("id"),
@@ -300,11 +314,16 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
             coverPath = item.optString("path_cover_small").ifEmpty { null },
             serverName = serverName,
             fileId = fileId,
+            folder = folder,
         )
     }
 
     /** Baixa para um arquivo temporário e só renomeia no fim; [onProgress] recebe bytes baixados. */
     fun download(game: RemoteGame, target: File, onProgress: (Long) -> Unit) {
+        if (game.folder) {
+            downloadFolder(game, target, onProgress)
+            return
+        }
         val url = base.resolve("api/roms/${game.id}/content/")!!.newBuilder()
             .addPathSegment(game.serverName)
             .apply { game.fileId?.let { addQueryParameter("file_ids", it.toString()) } }
@@ -328,6 +347,90 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
             }
         }
         if (game.fileId != null && isZip(temp) && target.extension.lowercase() != "zip") unzipSingle(temp, target)
+        target.delete()
+        check(temp.renameTo(target)) { "Não consegui gravar ${target.name}" }
+    }
+
+    /** Baixa a pasta do jogo (o servidor entrega um zip) e extrai tudo; cria a lista .m3u se faltar. */
+    private fun downloadFolder(game: RemoteGame, target: File, onProgress: (Long) -> Unit) {
+        val dir = checkNotNull(target.parentFile)
+        val url = base.resolve("api/roms/${game.id}/content/")!!.newBuilder().addPathSegment(game.serverName).build()
+        val temp = File(dir.parentFile, "${dir.name}.part")
+        temp.deleteRecursively()
+        temp.mkdirs()
+        longHttp.newCall(request(url).build()).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("Servidor respondeu ${response.code}")
+            var total = 0L
+            val counting = object : java.io.FilterInputStream(response.body.byteStream()) {
+                override fun read(): Int = super.read().also { if (it >= 0) onProgress(++total) }
+
+                override fun read(b: ByteArray, off: Int, len: Int): Int = super.read(b, off, len).also {
+                    if (it > 0) {
+                        total += it
+                        onProgress(total)
+                    }
+                }
+            }
+            java.util.zip.ZipInputStream(counting).use { zip ->
+                val canonicalTemp = temp.canonicalPath
+                var entry = zip.nextEntry
+                checkNotNull(entry) { "O servidor não devolveu um pacote para ${game.title}" }
+                while (entry != null) {
+                    val out = File(temp, entry.name)
+                    // Protege contra caminhos como ../ dentro do pacote.
+                    check(out.canonicalPath.startsWith(canonicalTemp + File.separator)) { "Pacote inválido" }
+                    if (entry.isDirectory) {
+                        out.mkdirs()
+                    } else {
+                        out.parentFile?.mkdirs()
+                        out.outputStream().use { zip.copyTo(it) }
+                    }
+                    entry = zip.nextEntry
+                }
+            }
+        }
+        // O pacote pode trazer tudo dentro de uma pasta única: sobe o conteúdo um nível.
+        val onlyChild = temp.listFiles()?.singleOrNull()
+        val content = if (onlyChild != null && onlyChild.isDirectory) onlyChild else temp
+        if (!File(content, game.fileName).isFile && game.fileName.endsWith(".m3u", ignoreCase = true)) {
+            val discs = content.listFiles().orEmpty().filter { it.isFile && it.extension.lowercase() in setOf("cue", "chd", "iso", "pbp") }
+            val cues = discs.filter { it.extension.equals("cue", ignoreCase = true) }
+            val list = (cues.ifEmpty { discs }).map { it.name }.sorted()
+            check(list.isNotEmpty()) { "Nenhum disco encontrado em ${game.title}" }
+            File(content, game.fileName).writeText(list.joinToString("\n") + "\n")
+        }
+        dir.deleteRecursively()
+        check(content.renameTo(dir)) { "Não consegui gravar ${dir.name}" }
+        temp.deleteRecursively()
+    }
+
+    /** Arquivos de firmware (BIOS) que o servidor guarda, de todas as plataformas. */
+    fun listFirmware(): List<RemoteFirmware> {
+        val text = http.newCall(request(base.resolve("api/platforms")!!).build()).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("Servidor respondeu ${response.code}")
+            response.body.string()
+        }
+        val platforms = org.json.JSONArray(text)
+        val result = mutableListOf<RemoteFirmware>()
+        for (i in 0 until platforms.length()) {
+            val firmware = platforms.getJSONObject(i).optJSONArray("firmware") ?: continue
+            for (j in 0 until firmware.length()) {
+                val item = firmware.getJSONObject(j)
+                if (item.optBoolean("missing_from_fs", false)) continue
+                result += RemoteFirmware(item.getLong("id"), item.getString("file_name"))
+            }
+        }
+        return result
+    }
+
+    fun downloadFirmware(firmware: RemoteFirmware, target: File) {
+        val url = base.resolve("api/firmware/${firmware.id}/content/")!!.newBuilder().addPathSegment(firmware.fileName).build()
+        target.parentFile?.mkdirs()
+        val temp = File(target.parentFile, "${target.name}.part")
+        longHttp.newCall(request(url).build()).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("Servidor respondeu ${response.code}")
+            temp.outputStream().use { response.body.byteStream().copyTo(it) }
+        }
         target.delete()
         check(temp.renameTo(target)) { "Não consegui gravar ${target.name}" }
     }

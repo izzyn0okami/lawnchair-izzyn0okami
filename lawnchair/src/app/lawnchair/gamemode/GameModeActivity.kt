@@ -120,17 +120,24 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
     var hasAccess by remember { mutableStateOf(StorageAccess.isGranted()) }
     var scanTick by remember { mutableIntStateOf(0) }
     var version by remember { mutableIntStateOf(0) }
+    var showBios by remember { mutableStateOf(false) }
 
     LaunchedEffect(refreshKey, scanTick, rootPath) {
         hasAccess = StorageAccess.isGranted()
+        withContext(Dispatchers.IO) { BiosManager.importFromFolder(context, File(rootPath)) }
         games = withContext(Dispatchers.IO) { GameLibraryScanner.scan(File(rootPath)) }
         androidGames = withContext(Dispatchers.IO) { AndroidGames.list(context) }
         version++
     }
 
-    BackHandler(enabled = detail != null) { detail = null }
+    BackHandler(enabled = detail != null || showBios) {
+        if (showBios) showBios = false else detail = null
+    }
 
     suspend fun startGame(coreId: String, romPath: String, title: String, loadState: Boolean, platform: GamePlatform?) {
+        if (platform != null && !BiosManager.isReady(context, platform)) {
+            error(context.getString(R.string.game_bios_missing, platform.name))
+        }
         val core = CoreInstaller.ensureInstalled(context, coreId) { bytes ->
             status = context.getString(R.string.game_mode_status_downloading, coreId, bytes / 1024)
         }.getOrThrow()
@@ -189,7 +196,13 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
     ) {
         val current = detail
         if (current == null) {
-            TopBar(selected = tab, onSelect = { tab = it })
+            TopBar(
+                selected = tab,
+                onSelect = {
+                    tab = it
+                    showBios = false
+                },
+            )
         }
         Box(modifier = Modifier.weight(1f)) {
             when {
@@ -215,6 +228,8 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
                     },
                 )
 
+                tab == GameTab.Settings && showBios -> BiosScreen(rootPath = rootPath)
+
                 tab == GameTab.Settings -> SettingsScreen(
                     rootPath = rootPath,
                     needsAccess = needsAccess,
@@ -223,6 +238,7 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
                     onRefresh = { scanTick++ },
                     onGrantAccess = { context.startActivity(StorageAccess.settingsIntent(context)) },
                     onPickRom = { romPicker.launch(arrayOf("*/*")) },
+                    onOpenBios = { showBios = true },
                     onExit = onExit,
                 )
 

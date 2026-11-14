@@ -38,6 +38,7 @@ object RomMCache {
                         coverPath = o.optString("cover").ifEmpty { null },
                         serverName = o.optString("server").ifEmpty { o.getString("file") },
                         fileId = if (o.has("fileId")) o.getLong("fileId") else null,
+                        folder = o.optBoolean("folder", false),
                     ),
                 )
             }
@@ -58,6 +59,7 @@ object RomMCache {
                         .put("size", it.sizeBytes)
                         .put("cover", it.coverPath.orEmpty())
                         .put("server", it.serverName)
+                        .put("folder", it.folder)
                         .apply { it.fileId?.let { id -> put("fileId", id) } },
                 )
             }

@@ -9,7 +9,16 @@ data class GamePlatform(
     val sortOrder: Int,
     /** Identificador do console no RetroAchievements (null = sem conquistas). */
     val raConsoleId: Int? = null,
+    /** Jogos em disco (cue/chd/iso...): podem vir como pasta com vários arquivos. */
+    val discBased: Boolean = false,
+    /** Arquivos de BIOS que o núcleo usa (basta um deles). */
+    val bios: List<BiosFile> = emptyList(),
+    /** true = sem BIOS o jogo não roda; false = só melhora a compatibilidade. */
+    val biosRequired: Boolean = false,
 )
+
+/** Um arquivo de BIOS esperado na pasta de sistema do núcleo. */
+data class BiosFile(val name: String, val label: String)
 
 /**
  * Plataformas que o motor atual (M3) sabe jogar. A decisão segue a lógica do Argosy: o nome da
@@ -22,8 +31,55 @@ object GamePlatforms {
         GamePlatform("snes", "Super Nintendo", "snes9x", setOf("sfc", "smc", "swc", "fig"), setOf("snes", "sfc", "superfamicom", "supernintendo"), 20, 3),
         GamePlatform("gb", "Game Boy", "mgba", setOf("gb"), setOf("gb", "gameboy"), 30, 4),
         GamePlatform("gbc", "Game Boy Color", "mgba", setOf("gbc"), setOf("gbc", "gameboycolor"), 31, 6),
-        GamePlatform("gba", "Game Boy Advance", "mgba", setOf("gba"), setOf("gba", "gameboyadvance"), 32, 5),
+        GamePlatform(
+            slug = "gba",
+            name = "Game Boy Advance",
+            coreId = "mgba",
+            extensions = setOf("gba"),
+            folderAliases = setOf("gba", "gameboyadvance"),
+            sortOrder = 32,
+            raConsoleId = 5,
+            bios = listOf(BiosFile("gba_bios.bin", "Game Boy Advance (opcional)")),
+        ),
         GamePlatform("genesis", "Mega Drive / Genesis", "genesis_plus_gx", setOf("md", "gen", "smd"), setOf("genesis", "megadrive", "md", "segagenesis", "segamegadrive"), 40, 1),
+        GamePlatform("sms", "Master System", "genesis_plus_gx", setOf("sms"), setOf("sms", "mastersystem", "segamastersystem"), 41, 11),
+        GamePlatform("gg", "Game Gear", "genesis_plus_gx", setOf("gg"), setOf("gg", "gamegear", "segagamegear"), 42, 15),
+        GamePlatform("32x", "Sega 32X", "picodrive", setOf("32x"), setOf("32x", "sega32x"), 43),
+        GamePlatform(
+            slug = "scd",
+            name = "Sega CD",
+            coreId = "genesis_plus_gx",
+            extensions = setOf("cue", "chd", "iso", "m3u"),
+            folderAliases = setOf("scd", "segacd", "megacd", "segamegacd"),
+            sortOrder = 44,
+            discBased = true,
+            bios = listOf(
+                BiosFile("bios_CD_U.bin", "Sega CD (EUA)"),
+                BiosFile("bios_CD_E.bin", "Mega CD (Europa)"),
+                BiosFile("bios_CD_J.bin", "Mega CD (Japão)"),
+            ),
+            biosRequired = true,
+        ),
+        GamePlatform("n64", "Nintendo 64", "mupen64plus_next_gles3", setOf("z64", "n64", "v64"), setOf("n64", "nintendo64"), 50),
+        GamePlatform(
+            slug = "psx",
+            name = "PlayStation",
+            coreId = "pcsx_rearmed",
+            extensions = setOf("cue", "chd", "pbp", "iso", "m3u"),
+            folderAliases = setOf("psx", "ps1", "playstation", "playstation1", "sonyplaystation"),
+            sortOrder = 60,
+            discBased = true,
+            bios = listOf(
+                BiosFile("scph5501.bin", "PlayStation (EUA) v3.0"),
+                BiosFile("scph5500.bin", "PlayStation (Japão)"),
+                BiosFile("scph5502.bin", "PlayStation (Europa)"),
+                BiosFile("scph1001.bin", "PlayStation (EUA) v2.0"),
+            ),
+        ),
+        GamePlatform("pce", "PC Engine / TurboGrafx-16", "mednafen_pce_fast", setOf("pce"), setOf("pce", "tg16", "pcengine", "turbografx16", "turbografx"), 70, 8),
+        GamePlatform("atari2600", "Atari 2600", "stella", setOf("a26"), setOf("atari2600", "2600", "a26"), 80, 25),
+        GamePlatform("ngp", "Neo Geo Pocket", "mednafen_ngp", setOf("ngp", "ngc"), setOf("ngp", "ngpc", "neogeopocket", "neogeopocketcolor"), 90, 14),
+        GamePlatform("wswan", "WonderSwan", "mednafen_wswan", setOf("ws", "wsc"), setOf("wonderswan", "wonderswancolor", "wswan", "ws", "wsc"), 91, 53),
     )
 
     /** Extensões genéricas: só valem quando a pasta já diz a plataforma. */
@@ -58,7 +114,7 @@ object GamePlatforms {
         for (folder in folders) {
             val key = normalize(folder)
             val byFolder = all.firstOrNull { key in it.folderAliases }
-            if (byFolder != null && (ext in byFolder.extensions || ext in genericExtensions)) return byFolder
+            if (byFolder != null && (ext in byFolder.extensions || (!byFolder.discBased && ext in genericExtensions))) return byFolder
         }
         return all.singleOrNull { ext in it.extensions }
     }

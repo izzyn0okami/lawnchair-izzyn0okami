@@ -44,8 +44,21 @@ object GameLibraryScanner {
             .onEnter { !it.name.startsWith(".") }
             .filter { it.isFile && !it.name.startsWith(".") }
             .mapNotNull { file -> toGame(root, file) }
-            .sortedWith(compareBy({ it.platform.sortOrder }, { it.title.lowercase() }))
             .toList()
+            .let(::dropDiscCompanions)
+            .sortedWith(compareBy({ it.platform.sortOrder }, { it.title.lowercase() }))
+    }
+
+    /** Pasta de jogo em disco com uma lista .m3u: só a lista aparece (os .cue/.chd são os discos dela). */
+    private fun dropDiscCompanions(games: List<LocalGame>): List<LocalGame> {
+        val withPlaylist = games
+            .filter { it.platform.discBased && it.path.endsWith(".m3u", ignoreCase = true) }
+            .map { File(it.path).parent }
+            .toSet()
+        if (withPlaylist.isEmpty()) return games
+        return games.filterNot { game ->
+            game.platform.discBased && !game.path.endsWith(".m3u", ignoreCase = true) && File(game.path).parent in withPlaylist
+        }
     }
 
     private fun toGame(root: File, file: File): LocalGame? {
