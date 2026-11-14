@@ -7,7 +7,9 @@ import android.os.SystemClock
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -48,6 +50,7 @@ import app.lawnchair.ui.theme.LawnchairTheme
 import com.android.launcher3.R
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.GLRetroViewData
+import com.swordfish.libretrodroid.Variable
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -65,6 +68,15 @@ class GameSessionActivity : ComponentActivity() {
     private var retroView: GLRetroView? = null
     private var saveStore: SaveStore? = null
     private var menuOpen by mutableStateOf(false)
+
+    /** Camada de avisos e menu por cima do jogo: com o menu fechado, o toque passa direto para o jogo (DS, 3DS). */
+    private fun passThrough(content: View): View = object : FrameLayout(this) {
+        init {
+            addView(content)
+        }
+
+        override fun dispatchTouchEvent(ev: MotionEvent): Boolean = menuOpen && super.dispatchTouchEvent(ev)
+    }
     private var selectDown = false
     private var startDown = false
     private var resumedAtMs = 0L
@@ -113,6 +125,10 @@ class GameSessionActivity : ComponentActivity() {
             systemDirectory = File(root, "system").apply { mkdirs() }.absolutePath
             savesDirectory = File(root, "saves").apply { mkdirs() }.absolutePath
             saveRAMState = store.readSram()
+            // DS: as duas telas lado a lado cabem melhor no celular em paisagem; o toque cai na tela certa.
+            if (intent.getStringExtra(EXTRA_PLATFORM) == "nds") {
+                variables = arrayOf(Variable(key = "melonds_screen_layout", value = "Left/Right"))
+            }
         }
 
         val view = GLRetroView(this, data)
@@ -143,7 +159,7 @@ class GameSessionActivity : ComponentActivity() {
         }
 
         addContentView(
-            ComposeView(this).apply {
+            passThrough(ComposeView(this).apply {
                 setContent {
                     LawnchairTheme {
                         raToast?.let { text ->
@@ -185,7 +201,7 @@ class GameSessionActivity : ComponentActivity() {
                         }
                     }
                 }
-            },
+            }),
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
         )
 
