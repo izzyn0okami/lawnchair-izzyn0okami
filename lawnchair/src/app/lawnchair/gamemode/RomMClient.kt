@@ -190,8 +190,7 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
         DevicePoll.Pending
     }
 
-    /** Todos os jogos do servidor cuja plataforma o motor sabe jogar e que são um arquivo só. */
-    /** Resumo do que o servidor tem e do que foi ignorado, para explicar uma lista vazia. */
+    // Resumo do que o servidor tem e do que foi ignorado, para explicar uma lista vazia.
     @Volatile
     var listReport: String = ""
         private set
@@ -201,6 +200,7 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
     private var skippedMulti = 0
     private var skippedExtension = 0
 
+    /** Todos os jogos do servidor cuja plataforma o motor sabe jogar e que são um arquivo só. */
     fun listGames(): List<RemoteGame> {
         serverTotal = 0
         skippedPlatforms.clear()

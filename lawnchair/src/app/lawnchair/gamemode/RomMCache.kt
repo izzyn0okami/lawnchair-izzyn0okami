@@ -19,15 +19,16 @@ object RomMCache {
 
     private fun file(context: Context) = File(context.filesDir, FILE)
 
-    fun load(context: Context, url: String): List<RemoteGame>? = runCatching {
+    fun load(context: Context, url: String): List<RemoteGame>? = runCatching<List<RemoteGame>?> {
         val root = JSONObject(file(context).readText())
         if (root.optString("url") != url) return@runCatching null
         val items = root.getJSONArray("games")
-        buildList {
-            for (i in 0 until items.length()) {
-                val o = items.getJSONObject(i)
-                val platform = GamePlatforms.bySlug(o.getString("platform")) ?: continue
-                add(
+        val result = mutableListOf<RemoteGame>()
+        for (i in 0 until items.length()) {
+            val o = items.getJSONObject(i)
+            val platform = GamePlatforms.bySlug(o.getString("platform"))
+            if (platform != null) {
+                result.add(
                     RemoteGame(
                         id = o.getLong("id"),
                         title = o.getString("title"),
@@ -39,6 +40,7 @@ object RomMCache {
                 )
             }
         }
+        result
     }.getOrNull()
 
     fun save(context: Context, url: String, games: List<RemoteGame>) {
