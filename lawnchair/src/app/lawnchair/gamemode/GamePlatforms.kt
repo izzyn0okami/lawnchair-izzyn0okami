@@ -15,6 +15,8 @@ data class GamePlatform(
     val bios: List<BiosFile> = emptyList(),
     /** true = sem BIOS o jogo não roda; false = só melhora a compatibilidade. */
     val biosRequired: Boolean = false,
+    /** Dentro do Tandem (núcleo libretro) ou em outro app. */
+    val launch: LaunchMode = LaunchMode.LIBRETRO,
 )
 
 /** Um arquivo de BIOS esperado na pasta de sistema do núcleo. */
@@ -173,6 +175,69 @@ object GamePlatforms {
             bios = listOf(BiosFile("lynxboot.img", "Atari Lynx (opcional)")),
         ),
         GamePlatform("jaguar", "Atari Jaguar", "virtualjaguar", setOf("j64", "jag"), setOf("jaguar", "atarijaguar", "j64"), 84),
+        GamePlatform(
+            slug = "ps2",
+            name = "PlayStation 2",
+            coreId = "",
+            extensions = setOf("iso", "chd", "cso", "zso", "gz"),
+            folderAliases = setOf("ps2", "playstation2", "sonyplaystation2"),
+            sortOrder = 100,
+            launch = LaunchMode.EMULATOR,
+        ),
+        GamePlatform(
+            slug = "gc",
+            name = "GameCube",
+            coreId = "",
+            extensions = setOf("gcm", "iso", "gcz", "rvz", "ciso", "tgc"),
+            folderAliases = setOf("gc", "ngc", "gamecube", "nintendogamecube"),
+            sortOrder = 101,
+            launch = LaunchMode.EMULATOR,
+        ),
+        GamePlatform(
+            slug = "wii",
+            name = "Wii",
+            coreId = "",
+            extensions = setOf("wbfs", "iso", "rvz", "wia", "wad"),
+            folderAliases = setOf("wii", "nintendowii"),
+            sortOrder = 102,
+            launch = LaunchMode.EMULATOR,
+        ),
+        GamePlatform(
+            slug = "switch",
+            name = "Nintendo Switch",
+            coreId = "",
+            extensions = setOf("nsp", "xci", "nsz", "xcz"),
+            folderAliases = setOf("switch", "nintendoswitch", "ns"),
+            sortOrder = 103,
+            launch = LaunchMode.EMULATOR,
+        ),
+        GamePlatform(
+            slug = "3ds",
+            name = "Nintendo 3DS",
+            coreId = "",
+            extensions = setOf("3ds", "cci", "cxi", "cia", "3dsx"),
+            folderAliases = setOf("3ds", "n3ds", "nintendo3ds"),
+            sortOrder = 104,
+            launch = LaunchMode.EMULATOR,
+        ),
+        GamePlatform(
+            slug = "wiiu",
+            name = "Wii U",
+            coreId = "",
+            extensions = setOf("wua", "wud", "wux", "rpx"),
+            folderAliases = setOf("wiiu", "nintendowiiu"),
+            sortOrder = 105,
+            launch = LaunchMode.EMULATOR,
+        ),
+        GamePlatform(
+            slug = "pc",
+            name = "PC (GameNative)",
+            coreId = "",
+            extensions = setOf("steam", "gog", "epic", "amazon"),
+            folderAliases = setOf("pc", "windows", "gamenative", "steam", "pcgames"),
+            sortOrder = 110,
+            launch = LaunchMode.GAMENATIVE,
+        ),
         GamePlatform(
             slug = "coleco",
             name = "ColecoVision",

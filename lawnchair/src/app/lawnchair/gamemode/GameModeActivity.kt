@@ -121,6 +121,7 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
     var scanTick by remember { mutableIntStateOf(0) }
     var version by remember { mutableIntStateOf(0) }
     var showBios by remember { mutableStateOf(false) }
+    var showEmulators by remember { mutableStateOf(false) }
 
     LaunchedEffect(refreshKey, scanTick, rootPath) {
         hasAccess = StorageAccess.isGranted()
@@ -130,11 +131,22 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
         version++
     }
 
-    BackHandler(enabled = detail != null || showBios) {
-        if (showBios) showBios = false else detail = null
+    BackHandler(enabled = detail != null || showBios || showEmulators) {
+        when {
+            showBios -> showBios = false
+            showEmulators -> showEmulators = false
+            else -> detail = null
+        }
     }
 
     suspend fun startGame(coreId: String, romPath: String, title: String, loadState: Boolean, platform: GamePlatform?) {
+        if (platform != null && platform.launch != LaunchMode.LIBRETRO) {
+            status = context.getString(R.string.game_external_opening, title)
+            ExternalEmulators.launch(context, LocalGame(title, platform, romPath))
+            PlayHistory.markPlayed(context, romPath, System.currentTimeMillis())
+            status = ""
+            return
+        }
         if (platform != null && !BiosManager.isReady(context, platform)) {
             error(context.getString(R.string.game_bios_missing, platform.name))
         }
@@ -201,6 +213,7 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
                 onSelect = {
                     tab = it
                     showBios = false
+                    showEmulators = false
                 },
             )
         }
@@ -230,6 +243,8 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
 
                 tab == GameTab.Settings && showBios -> BiosScreen(rootPath = rootPath)
 
+                tab == GameTab.Settings && showEmulators -> EmulatorsScreen()
+
                 tab == GameTab.Settings -> SettingsScreen(
                     rootPath = rootPath,
                     needsAccess = needsAccess,
@@ -239,6 +254,7 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
                     onGrantAccess = { context.startActivity(StorageAccess.settingsIntent(context)) },
                     onPickRom = { romPicker.launch(arrayOf("*/*")) },
                     onOpenBios = { showBios = true },
+                    onOpenEmulators = { showEmulators = true },
                     onExit = onExit,
                 )
 

@@ -328,6 +328,7 @@ internal fun SettingsScreen(
     onGrantAccess: () -> Unit,
     onPickRom: () -> Unit,
     onOpenBios: () -> Unit,
+    onOpenEmulators: () -> Unit,
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -357,6 +358,7 @@ internal fun SettingsScreen(
         }
         GameButton(stringResource(R.string.game_mode_play_rom), onPickRom, enabled = !busy)
         GameButton(stringResource(R.string.game_bios_open), onOpenBios)
+        GameButton(stringResource(R.string.game_emulators_open), onOpenEmulators)
         FocusSurface(onClick = toggleAuto, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),

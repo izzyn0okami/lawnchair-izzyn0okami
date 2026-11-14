@@ -189,6 +189,16 @@
         </provider>
 
         <provider
+            android:name="app.lawnchair.gamemode.RomFileProvider"
+            android:authorities="${applicationId}.gamemode.roms"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/game_rom_paths" />
+        </provider>
+
+        <provider
             android:name="app.lawnchair.search.LawnchairRecentSuggestionProvider"
             android:authorities="${applicationId}.search.LawnchairRecentSuggestionProvider"
             android:syncable="true"
