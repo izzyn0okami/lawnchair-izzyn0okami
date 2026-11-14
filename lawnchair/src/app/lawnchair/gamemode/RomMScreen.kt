@@ -2,12 +2,16 @@ package app.lawnchair.gamemode
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,6 +23,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +51,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.android.launcher3.R
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -55,22 +62,63 @@ import kotlinx.coroutines.withContext
 private val ROMM_CARD = 140.dp
 private val ROMM_GAP = 14.dp
 
-/** Aba do servidor RomM: conectar por código de pareamento, listar jogos e baixar para a pasta de jogos. */
+private const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
+
+/** Do Android 17 em diante, apps novos precisam da permissão de rede local para falar com aparelhos da casa. */
+private fun localNetworkGranted(context: Context): Boolean = Build.VERSION.SDK_INT < 37 ||
+    ContextCompat.checkSelfPermission(context, LOCAL_NETWORK_PERMISSION) == PackageManager.PERMISSION_GRANTED
+
+/** Aba do servidor RomM: conectar por aprovação no navegador, listar jogos e baixar para a pasta de jogos. */
 @Composable
 internal fun ServerScreen(rootPath: String, onLibraryChange: () -> Unit) {
     val context = LocalContext.current
     var connected by remember { mutableStateOf(RomMSettings.isConnected(context)) }
-    if (!connected) {
-        ConnectForm(onConnect = { connected = true })
-    } else {
-        ServerLibrary(
-            rootPath = rootPath,
-            onLibraryChange = onLibraryChange,
-            onDisconnect = {
-                RomMSettings.clear(context)
-                connected = false
-            },
-        )
+    var allowed by remember { mutableStateOf(localNetworkGranted(context)) }
+    val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed = it }
+    LaunchedEffect(Unit) {
+        if (!allowed) runCatching { request.launch(LOCAL_NETWORK_PERMISSION) }
+    }
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (!allowed) {
+            Column(
+                modifier = Modifier.padding(horizontal = 40.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(stringResource(R.string.game_local_network_info), color = GameColors.danger, fontSize = 14.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    GameButton(
+                        label = stringResource(R.string.game_local_network_allow),
+                        onClick = { runCatching { request.launch(LOCAL_NETWORK_PERMISSION) } },
+                        primary = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    GameButton(
+                        label = stringResource(R.string.game_local_network_settings),
+                        onClick = {
+                            context.startActivity(
+                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            if (!connected) {
+                ConnectForm(onConnect = { connected = true })
+            } else {
+                ServerLibrary(
+                    rootPath = rootPath,
+                    onLibraryChange = onLibraryChange,
+                    onDisconnect = {
+                        RomMSettings.clear(context)
+                        connected = false
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -105,6 +153,7 @@ private fun ConnectForm(onConnect: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 40.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -195,6 +244,7 @@ private fun PairingWait(pairing: DevicePairing, onApprove: (String) -> Unit, onF
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 40.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {

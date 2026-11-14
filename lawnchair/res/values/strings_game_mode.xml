@@ -100,4 +100,7 @@
     <string name="game_romm_pair_expired">O código expirou. Toque em Conectar para gerar outro.</string>
     <string name="game_romm_use_code">Usar código de pareamento</string>
     <string name="game_romm_use_device">Aprovar pelo navegador</string>
+    <string name="game_local_network_info">O Android bloqueia o acesso a aparelhos da sua rede (como o servidor RomM em casa) sem uma permissão. Toque em Permitir e aceite.</string>
+    <string name="game_local_network_allow">Permitir rede local</string>
+    <string name="game_local_network_settings">Abrir ajustes do app</string>
 </resources>
