@@ -36,6 +36,8 @@ object RomMCache {
                         fileName = o.getString("file"),
                         sizeBytes = o.optLong("size", 0L),
                         coverPath = o.optString("cover").ifEmpty { null },
+                        serverName = o.optString("server").ifEmpty { o.getString("file") },
+                        fileId = if (o.has("fileId")) o.getLong("fileId") else null,
                     ),
                 )
             }
@@ -54,7 +56,9 @@ object RomMCache {
                         .put("platform", it.platform.slug)
                         .put("file", it.fileName)
                         .put("size", it.sizeBytes)
-                        .put("cover", it.coverPath.orEmpty()),
+                        .put("cover", it.coverPath.orEmpty())
+                        .put("server", it.serverName)
+                        .apply { it.fileId?.let { id -> put("fileId", id) } },
                 )
             }
             file(context).writeText(JSONObject().put("url", url).put("games", items).toString())

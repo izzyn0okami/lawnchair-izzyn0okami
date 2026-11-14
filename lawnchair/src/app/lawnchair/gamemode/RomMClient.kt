@@ -22,6 +22,10 @@ data class RemoteGame(
     val fileName: String,
     val sizeBytes: Long,
     val coverPath: String?,
+    /** Nome do jogo no servidor (pasta ou arquivo), usado na URL de download. */
+    val serverName: String = fileName,
+    /** Arquivo dentro da pasta do jogo, quando o jogo é uma pasta com um único arquivo jogável. */
+    val fileId: Long? = null,
 ) {
     /** Pasta de destino dentro da pasta de jogos: uma subpasta por plataforma. */
     fun destination(root: File): File = File(File(root, platform.slug), fileName)
@@ -216,6 +220,7 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
                 .addQueryParameter("offset", offset.toString())
                 .addQueryParameter("with_char_index", "false")
                 .addQueryParameter("with_filter_values", "false")
+                .addQueryParameter("with_files", "true")
                 .build()
             val json = longHttp.newCall(request(url).build()).execute().use { response ->
                 GameLog.log("romm", "GET api/roms offset=$offset -> ${response.code}")
@@ -251,10 +256,6 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
     }
 
     private fun parseGame(item: JSONObject): RemoteGame? {
-        if (item.optBoolean("has_multiple_files", false)) {
-            skippedMulti++
-            return null
-        }
         val slug = item.optString("platform_slug")
         val platform = GamePlatforms.fromRomM(slug)
         if (platform == null) {
@@ -262,10 +263,33 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
             skippedPlatforms[slug.ifEmpty { "?" }] = (skippedPlatforms[slug.ifEmpty { "?" }] ?: 0) + 1
             return null
         }
-        val fileName = item.optString("fs_name").ifEmpty { return null }
-        if (File(fileName).extension.lowercase() !in platform.extensions + GamePlatforms.genericExtensions) {
-            skippedExtension++
-            return null
+        val serverName = item.optString("fs_name").ifEmpty { return null }
+        val allowed = platform.extensions + GamePlatforms.genericExtensions
+        val flat = File(serverName).extension.lowercase() in allowed &&
+            !item.optBoolean("has_multiple_files", false) &&
+            !item.optBoolean("has_nested_single_file", false)
+        var fileName = serverName
+        var fileId: Long? = null
+        if (!flat) {
+            // Jogo guardado numa pasta: precisa haver exatamente um arquivo jogável dentro dela.
+            val files = item.optJSONArray("files")
+            val playable = (0 until (files?.length() ?: 0)).map { files!!.getJSONObject(it) }.filter {
+                val name = it.optString("file_name")
+                !name.startsWith(".") && File(name).extension.lowercase() in allowed
+            }
+            when {
+                playable.isEmpty() -> {
+                    skippedExtension++
+                    return null
+                }
+
+                playable.size > 1 -> {
+                    skippedMulti++
+                    return null
+                }
+            }
+            fileName = playable.single().getString("file_name")
+            fileId = playable.single().getLong("id")
         }
         return RemoteGame(
             id = item.getLong("id"),
@@ -274,13 +298,16 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
             fileName = fileName,
             sizeBytes = item.optLong("fs_size_bytes", 0L),
             coverPath = item.optString("path_cover_small").ifEmpty { null },
+            serverName = serverName,
+            fileId = fileId,
         )
     }
 
     /** Baixa para um arquivo temporário e só renomeia no fim; [onProgress] recebe bytes baixados. */
     fun download(game: RemoteGame, target: File, onProgress: (Long) -> Unit) {
         val url = base.resolve("api/roms/${game.id}/content/")!!.newBuilder()
-            .addPathSegment(game.fileName)
+            .addPathSegment(game.serverName)
+            .apply { game.fileId?.let { addQueryParameter("file_ids", it.toString()) } }
             .build()
         target.parentFile?.mkdirs()
         val temp = File(target.parentFile, "${target.name}.part")
@@ -300,8 +327,27 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
                 }
             }
         }
+        if (game.fileId != null && isZip(temp) && target.extension.lowercase() != "zip") unzipSingle(temp, target)
         target.delete()
         check(temp.renameTo(target)) { "Não consegui gravar ${target.name}" }
+    }
+
+    private fun isZip(file: File): Boolean = file.inputStream().use {
+        val head = ByteArray(4)
+        it.read(head) == 4 && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte() && head[2] == 3.toByte()
+    }
+
+    /** O servidor às vezes empacota a pasta num zip: tira de dentro o arquivo do jogo. */
+    private fun unzipSingle(zip: File, target: File) {
+        val out = File(zip.parentFile, "${zip.name}.out")
+        java.util.zip.ZipInputStream(zip.inputStream()).use { input ->
+            var entry = input.nextEntry
+            while (entry != null && (entry.isDirectory || File(entry.name).name != target.name)) entry = input.nextEntry
+            checkNotNull(entry) { "O pacote do servidor não contém ${target.name}" }
+            out.outputStream().use { input.copyTo(it) }
+        }
+        zip.delete()
+        check(out.renameTo(zip)) { "Não consegui extrair ${target.name}" }
     }
 
     /** Baixa a capa para o cache e devolve o arquivo (ou nulo se falhar). */
