@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          submodules: true
+          submodules: recursive
       - uses: actions/setup-java@v6
         with:
           distribution: 'zulu'

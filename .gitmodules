@@ -2,3 +2,9 @@
 	path = platform_frameworks_libs_systemui
 	url = https://github.com/LawnchairLauncher/platform_frameworks_libs_systemui
     branch = 16-dev
+[submodule "libretrodroid/src/main/cpp/rcheevos"]
+	path = libretrodroid/src/main/cpp/rcheevos
+	url = https://github.com/RetroAchievements/rcheevos.git
+[submodule "libretrodroid/src/main/cpp/libadrenotools"]
+	path = libretrodroid/src/main/cpp/libadrenotools
+	url = https://github.com/bylaws/libadrenotools.git

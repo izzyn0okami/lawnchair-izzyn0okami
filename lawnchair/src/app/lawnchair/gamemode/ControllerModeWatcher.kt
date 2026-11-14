@@ -42,8 +42,46 @@ class ControllerModeWatcher(
 
     override fun onInputDeviceChanged(deviceId: Int) = Unit
 
-    private fun isPhysicalGamepad(device: InputDevice): Boolean {
-        if (device.isVirtual) return false
-        return (device.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+    private fun isPhysicalGamepad(device: InputDevice): Boolean = Companion.isPhysicalGamepad(device)
+
+    companion object {
+        fun isPhysicalGamepad(device: InputDevice): Boolean {
+            if (device.isVirtual) return false
+            return (device.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+        }
+
+        fun hasGamepad(): Boolean = InputDevice.getDeviceIds().any { id ->
+            InputDevice.getDevice(id)?.let(::isPhysicalGamepad) == true
+        }
     }
+}
+
+/** Avisa quando o último controle físico é desconectado. Registrar em onResume, soltar em onPause. */
+class ControllerLostWatcher(
+    context: Context,
+    private val onLost: () -> Unit,
+) : InputManager.InputDeviceListener {
+
+    private val inputManager = context.applicationContext.getSystemService(InputManager::class.java)
+    private var registered = false
+
+    fun start() {
+        if (registered) return
+        inputManager.registerInputDeviceListener(this, Handler(Looper.getMainLooper()))
+        registered = true
+    }
+
+    fun stop() {
+        if (!registered) return
+        inputManager.unregisterInputDeviceListener(this)
+        registered = false
+    }
+
+    override fun onInputDeviceAdded(deviceId: Int) = Unit
+
+    override fun onInputDeviceRemoved(deviceId: Int) {
+        if (!ControllerModeWatcher.hasGamepad()) onLost()
+    }
+
+    override fun onInputDeviceChanged(deviceId: Int) = Unit
 }
