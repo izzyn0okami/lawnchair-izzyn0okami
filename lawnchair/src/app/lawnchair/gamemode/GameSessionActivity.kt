@@ -159,49 +159,51 @@ class GameSessionActivity : ComponentActivity() {
         }
 
         addContentView(
-            passThrough(ComposeView(this).apply {
-                setContent {
-                    LawnchairTheme {
-                        raToast?.let { text ->
-                            LaunchedEffect(text) {
-                                delay(RA_TOAST_MS)
-                                if (raToast == text) raToast = null
+            passThrough(
+                ComposeView(this).apply {
+                    setContent {
+                        LawnchairTheme {
+                            raToast?.let { text ->
+                                LaunchedEffect(text) {
+                                    delay(RA_TOAST_MS)
+                                    if (raToast == text) raToast = null
+                                }
+                                AchievementToast(text)
                             }
-                            AchievementToast(text)
-                        }
-                        if (menuOpen) {
-                            val progress = if (raEntries.isEmpty()) {
-                                null
-                            } else {
-                                getString(R.string.game_ra_progress, raEntries.count { it.unlocked }, raEntries.size) +
-                                    if (raHardcore) " · " + getString(R.string.game_ra_hardcore_label) else ""
+                            if (menuOpen) {
+                                val progress = if (raEntries.isEmpty()) {
+                                    null
+                                } else {
+                                    getString(R.string.game_ra_progress, raEntries.count { it.unlocked }, raEntries.size) +
+                                        if (raHardcore) " · " + getString(R.string.game_ra_hardcore_label) else ""
+                                }
+                                PauseMenu(
+                                    title = File(romPath).nameWithoutExtension,
+                                    subtitle = progress,
+                                    canLoad = store.hasState() && !raHardcore,
+                                    hasAchievements = raEntries.isNotEmpty(),
+                                    onAchievements = { raListOpen = true },
+                                    onResume = { setMenu(false) },
+                                    onSave = { saveQuickState() },
+                                    onLoad = { loadQuickState() },
+                                    onReset = {
+                                        view.reset()
+                                        setMenu(false)
+                                    },
+                                    onExit = { exitGame() },
+                                )
                             }
-                            PauseMenu(
-                                title = File(romPath).nameWithoutExtension,
-                                subtitle = progress,
-                                canLoad = store.hasState() && !raHardcore,
-                                hasAchievements = raEntries.isNotEmpty(),
-                                onAchievements = { raListOpen = true },
-                                onResume = { setMenu(false) },
-                                onSave = { saveQuickState() },
-                                onLoad = { loadQuickState() },
-                                onReset = {
-                                    view.reset()
-                                    setMenu(false)
-                                },
-                                onExit = { exitGame() },
-                            )
-                        }
-                        if (menuOpen && raListOpen) {
-                            AchievementListPanel(
-                                title = File(romPath).nameWithoutExtension,
-                                entries = raEntries,
-                                hardcore = raHardcore,
-                            )
+                            if (menuOpen && raListOpen) {
+                                AchievementListPanel(
+                                    title = File(romPath).nameWithoutExtension,
+                                    entries = raEntries,
+                                    hardcore = raHardcore,
+                                )
+                            }
                         }
                     }
-                }
-            }),
+                },
+            ),
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
         )
 
