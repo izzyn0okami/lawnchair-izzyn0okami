@@ -72,7 +72,9 @@ class GameSessionActivity : ComponentActivity() {
     private var romPath: String? = null
     private var raSession: RaSession? = null
     private var raToast by mutableStateOf<String?>(null)
-    private var raProgress by mutableStateOf<String?>(null)
+    private var raEntries by mutableStateOf<List<RaEntry>>(emptyList())
+    private var raHardcore by mutableStateOf(false)
+    private var raListOpen by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -126,8 +128,12 @@ class GameSessionActivity : ComponentActivity() {
                 platform = platform,
                 romPath = romPath,
                 scope = lifecycleScope,
+                hardcore = RaSettings.hardcore(this),
                 onUnlock = { raToast = getString(R.string.game_ra_unlocked, it.title, it.points) },
-                onProgress = { earned, total -> raProgress = if (total > 0) getString(R.string.game_ra_progress, earned, total) else null },
+                onState = { entries, hardcore ->
+                    raEntries = entries
+                    raHardcore = hardcore && entries.isNotEmpty()
+                },
             )
             raSession = session
             lifecycleScope.launch {
@@ -148,10 +154,18 @@ class GameSessionActivity : ComponentActivity() {
                             AchievementToast(text)
                         }
                         if (menuOpen) {
+                            val progress = if (raEntries.isEmpty()) {
+                                null
+                            } else {
+                                getString(R.string.game_ra_progress, raEntries.count { it.unlocked }, raEntries.size) +
+                                    if (raHardcore) " · " + getString(R.string.game_ra_hardcore_label) else ""
+                            }
                             PauseMenu(
                                 title = File(romPath).nameWithoutExtension,
-                                subtitle = raProgress,
-                                canLoad = store.hasState(),
+                                subtitle = progress,
+                                canLoad = store.hasState() && !raHardcore,
+                                hasAchievements = raEntries.isNotEmpty(),
+                                onAchievements = { raListOpen = true },
                                 onResume = { setMenu(false) },
                                 onSave = { saveQuickState() },
                                 onLoad = { loadQuickState() },
@@ -160,6 +174,13 @@ class GameSessionActivity : ComponentActivity() {
                                     setMenu(false)
                                 },
                                 onExit = { exitGame() },
+                            )
+                        }
+                        if (menuOpen && raListOpen) {
+                            AchievementListPanel(
+                                title = File(romPath).nameWithoutExtension,
+                                entries = raEntries,
+                                hardcore = raHardcore,
                             )
                         }
                     }
@@ -171,7 +192,9 @@ class GameSessionActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() = setMenu(!menuOpen)
+                override fun handleOnBackPressed() {
+                    if (raListOpen) raListOpen = false else setMenu(!menuOpen)
+                }
             },
         )
 
@@ -182,7 +205,8 @@ class GameSessionActivity : ComponentActivity() {
             }
         }
 
-        if (intent.getBooleanExtra(EXTRA_LOAD_STATE, false) && store.hasState()) {
+        val statesBlocked = platform != null && RaSettings.blocksStates(this, platform)
+        if (intent.getBooleanExtra(EXTRA_LOAD_STATE, false) && store.hasState() && !statesBlocked) {
             lifecycleScope.launch {
                 view.getGLRetroEvents().first { it is GLRetroView.GLRetroEvents.FrameRendered }
                 loadQuickState()
@@ -337,6 +361,8 @@ private fun PauseMenu(
     title: String,
     subtitle: String?,
     canLoad: Boolean,
+    hasAchievements: Boolean,
+    onAchievements: () -> Unit,
     onResume: () -> Unit,
     onSave: () -> Unit,
     onLoad: () -> Unit,
@@ -375,6 +401,7 @@ private fun PauseMenu(
             GameButton(stringResource(R.string.game_session_save_state), onSave)
             GameButton(stringResource(R.string.game_session_load_state), onLoad, enabled = canLoad)
             GameButton(stringResource(R.string.game_session_reset), onReset)
+            if (hasAchievements) GameButton(stringResource(R.string.game_session_achievements), onAchievements)
             GameButton(stringResource(R.string.game_session_exit), onExit, danger = true, modifier = Modifier.padding(top = 8.dp))
             Text(
                 text = stringResource(R.string.game_session_autosave_note),

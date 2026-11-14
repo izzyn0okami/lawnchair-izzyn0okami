@@ -38,7 +38,18 @@ object RaSettings {
         prefs(context).edit { clear() }
     }
 
-    /** Conquistas desbloqueadas sem rede, guardadas como "idConquista|hashDoJogo" para reenviar depois. */
+    /** Modo hardcore: sem carregar estados salvos; as conquistas valem em dobro no site. */
+    fun hardcore(context: Context): Boolean = prefs(context).getBoolean("hardcore", false)
+
+    fun setHardcore(context: Context, enabled: Boolean) {
+        prefs(context).edit { putBoolean("hardcore", enabled) }
+    }
+
+    /** O hardcore bloqueia estados salvos neste jogo? (só em plataformas com conquistas e com conta) */
+    fun blocksStates(context: Context, platform: GamePlatform): Boolean =
+        hardcore(context) && isLoggedIn(context) && platform.raConsoleId != null
+
+    /** Conquistas desbloqueadas sem rede, guardadas como "idConquista|hashDoJogo|h" (h = 1 hardcore) para reenviar depois. */
     fun pending(context: Context): Set<String> = prefs(context).getStringSet("pending", emptySet()).orEmpty()
 
     fun setPending(context: Context, entries: Set<String>) {
@@ -47,6 +58,12 @@ object RaSettings {
 }
 
 data class RaAchievement(val id: Long, val title: String, val description: String, val points: Int, val memAddr: String)
+
+/** Uma conquista do jogo e se o usuário já a tem (no modo em que está jogando). */
+data class RaEntry(val achievement: RaAchievement, val unlocked: Boolean)
+
+/** Conquistas que o usuário já tem: no modo normal e no hardcore. */
+data class RaUnlocks(val softcore: Set<Long>, val hardcore: Set<Long>)
 
 /** Cliente mínimo da API clássica do RetroAchievements (dorequest.php). Chamadas bloqueantes. */
 class RaClient {
@@ -99,28 +116,28 @@ class RaClient {
             .filter { it.memAddr.isNotBlank() && !it.title.contains("Unknown Emulator", ignoreCase = true) }
     }
 
-    /** Inicia a sessão de jogo e devolve os códigos das conquistas que o usuário já tem. */
-    fun startSession(user: String, token: String, gameId: Long): Set<Long> {
-        val json = call("r" to "startsession", "u" to user, "t" to token, "g" to gameId.toString(), "h" to "0")
-        val ids = mutableSetOf<Long>()
-        for (key in listOf("Unlocks", "HardcoreUnlocks")) {
-            val array = json.optJSONArray(key) ?: continue
-            for (i in 0 until array.length()) ids += array.getJSONObject(i).getLong("ID")
+    /** Inicia a sessão de jogo e devolve as conquistas que o usuário já tem. */
+    fun startSession(user: String, token: String, gameId: Long, hardcore: Boolean): RaUnlocks {
+        val json = call("r" to "startsession", "u" to user, "t" to token, "g" to gameId.toString(), "h" to if (hardcore) "1" else "0")
+        fun ids(key: String): Set<Long> {
+            val array = json.optJSONArray(key) ?: return emptySet()
+            return (0 until array.length()).map { array.getJSONObject(it).getLong("ID") }.toSet()
         }
-        return ids
+        return RaUnlocks(softcore = ids("Unlocks"), hardcore = ids("HardcoreUnlocks"))
     }
 
-    /** Registra a conquista (modo normal). "Já tinha" conta como sucesso. */
-    fun award(user: String, token: String, achievementId: Long, gameHash: String): Boolean {
+    /** Registra a conquista. "Já tinha" conta como sucesso. */
+    fun award(user: String, token: String, achievementId: Long, gameHash: String, hardcore: Boolean): Boolean {
+        val mode = if (hardcore) "1" else "0"
         val validation = MessageDigest.getInstance("MD5")
-            .digest("$achievementId${user}0".toByteArray())
+            .digest("$achievementId$user$mode".toByteArray())
             .joinToString("") { "%02x".format(it) }
         val json = call(
             "r" to "awardachievement",
             "u" to user,
             "t" to token,
             "a" to achievementId.toString(),
-            "h" to "0",
+            "h" to mode,
             "m" to gameHash,
             "v" to validation,
         )
@@ -129,7 +146,7 @@ class RaClient {
 }
 
 /**
- * Conquistas durante uma partida (modo normal, sem hardcore): descobre o jogo pelo hash da ROM,
+ * Conquistas durante uma partida (normal ou hardcore): descobre o jogo pelo hash da ROM,
  * entrega as conquistas ao motor e registra no site as que forem desbloqueadas. Sem rede, as
  * conquistas ficam guardadas e são reenviadas na próxima partida.
  */
@@ -139,14 +156,15 @@ class RaSession(
     private val platform: GamePlatform,
     private val romPath: String,
     private val scope: CoroutineScope,
+    private val hardcore: Boolean,
     private val onUnlock: (RaAchievement) -> Unit,
-    private val onProgress: (earned: Int, total: Int) -> Unit,
+    private val onState: (entries: List<RaEntry>, hardcore: Boolean) -> Unit,
 ) {
     private val client = RaClient()
+    private var all = emptyList<RaAchievement>()
     private var achievementsById = emptyMap<Long, RaAchievement>()
+    private val unlockedIds = mutableSetOf<Long>()
     private var gameHash: String? = null
-    private var earned = 0
-    private var total = 0
 
     /** Chamar só depois que o jogo já está rodando (o motor precisa do mapa de memória do núcleo). */
     fun start() {
@@ -159,13 +177,14 @@ class RaSession(
                 val hash = LibretroDroid.computeRomHash(romPath, consoleId) ?: return@launch
                 gameHash = hash
                 val gameId = client.gameIdForHash(hash) ?: return@launch
-                val unlocked = runCatching { client.startSession(user, token, gameId) }.getOrDefault(emptySet())
-                val all = client.achievements(user, token, gameId)
+                val unlocks = runCatching { client.startSession(user, token, gameId, hardcore) }
+                    .getOrDefault(RaUnlocks(emptySet(), emptySet()))
+                // No hardcore só contam as já ganhas em hardcore; no normal, qualquer uma.
+                unlockedIds += if (hardcore) unlocks.hardcore else unlocks.softcore + unlocks.hardcore
+                all = client.achievements(user, token, gameId)
                 achievementsById = all.associateBy { it.id }
-                total = all.size
-                earned = all.count { it.id in unlocked }
-                withContext(Dispatchers.Main) { onProgress(earned, total) }
-                val toWatch = all.filter { it.id !in unlocked }
+                publish()
+                val toWatch = all.filter { it.id !in unlockedIds }
                 if (toWatch.isNotEmpty()) {
                     LibretroDroid.initAchievements(toWatch.map { AchievementDef(it.id, it.memAddr) }.toTypedArray(), consoleId)
                     view.achievementUnlockListener = { id -> handleUnlock(id, user, token) }
@@ -181,24 +200,32 @@ class RaSession(
 
     private fun handleUnlock(id: Long, user: String, token: String) {
         val achievement = achievementsById[id] ?: return
-        earned++
+        unlockedIds += id
         scope.launch(Dispatchers.Main) {
             onUnlock(achievement)
-            onProgress(earned, total)
+            publish()
         }
         val hash = gameHash ?: return
         scope.launch(Dispatchers.IO) {
-            val sent = runCatching { client.award(user, token, id, hash) }.getOrDefault(false)
-            if (!sent) RaSettings.setPending(context, RaSettings.pending(context) + "$id|$hash")
+            val sent = runCatching { client.award(user, token, id, hash, hardcore) }.getOrDefault(false)
+            if (!sent) RaSettings.setPending(context, RaSettings.pending(context) + "$id|$hash|${if (hardcore) 1 else 0}")
         }
+    }
+
+    private suspend fun publish() {
+        val entries = all.map { RaEntry(it, it.id in unlockedIds) }
+        withContext(Dispatchers.Main) { onState(entries, hardcore) }
     }
 
     private fun resendPending(user: String, token: String) {
         val pending = RaSettings.pending(context)
         if (pending.isEmpty()) return
         val remaining = pending.filterNot { entry ->
-            val (id, hash) = entry.split("|").let { it[0].toLongOrNull() to it.getOrNull(1) }
-            id != null && hash != null && runCatching { client.award(user, token, id, hash) }.getOrDefault(false)
+            val parts = entry.split("|")
+            val id = parts[0].toLongOrNull()
+            val hash = parts.getOrNull(1)
+            val wasHardcore = parts.getOrNull(2) == "1"
+            id != null && hash != null && runCatching { client.award(user, token, id, hash, wasHardcore) }.getOrDefault(false)
         }
         RaSettings.setPending(context, remaining.toSet())
     }

@@ -2,10 +2,16 @@ package app.lawnchair.gamemode
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -13,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -39,14 +46,34 @@ internal fun AchievementsScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(stringResource(R.string.game_ra_title), color = GameColors.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.game_ra_title), color = GameColors.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text(stringResource(R.string.game_ra_howto), color = GameColors.textDim, fontSize = 14.sp)
         val current = user
         if (current != null && RaSettings.isLoggedIn(context)) {
             Text(stringResource(R.string.game_ra_connected, current), color = GameColors.success, fontSize = 16.sp)
+            var hardcore by remember { mutableStateOf(RaSettings.hardcore(context)) }
+            FocusSurface(
+                onClick = {
+                    hardcore = !hardcore
+                    RaSettings.setHardcore(context, hardcore)
+                },
+                modifier = Modifier.width(520.dp),
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(R.string.game_ra_hardcore), color = GameColors.text, fontSize = 16.sp)
+                    Switch(checked = hardcore, onCheckedChange = null)
+                }
+            }
+            Text(stringResource(R.string.game_ra_hardcore_note), color = GameColors.textDim, fontSize = 12.sp)
             GameButton(
                 label = stringResource(R.string.game_ra_logout),
                 danger = true,

@@ -251,7 +251,9 @@ internal fun GameDetailScreen(
 ) {
     val context = LocalContext.current
     val history = remember(game.path) { PlayHistory.get(context, game.path) }
-    val hasState = remember(game.path) { SaveStore(context, game.platform.coreId, File(game.path)).hasState() }
+    val hasState = remember(game.path) {
+        SaveStore(context, game.platform.coreId, File(game.path)).hasState() && !RaSettings.blocksStates(context, game.platform)
+    }
     val playFocus = remember { FocusRequester() }
     LaunchedEffect(game.path) { runCatching { playFocus.requestFocus() } }
 
