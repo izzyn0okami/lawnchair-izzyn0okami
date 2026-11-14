@@ -190,7 +190,21 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
     }
 
     /** Todos os jogos do servidor cuja plataforma o motor sabe jogar e que são um arquivo só. */
+    /** Resumo do que o servidor tem e do que foi ignorado, para explicar uma lista vazia. */
+    @Volatile
+    var listReport: String = ""
+        private set
+
+    private var serverTotal = 0
+    private val skippedPlatforms = sortedMapOf<String, Int>()
+    private var skippedMulti = 0
+    private var skippedExtension = 0
+
     fun listGames(): List<RemoteGame> {
+        serverTotal = 0
+        skippedPlatforms.clear()
+        skippedMulti = 0
+        skippedExtension = 0
         val games = mutableListOf<RemoteGame>()
         var offset = 0
         while (true) {
@@ -212,16 +226,38 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
                 parseGame(items.getJSONObject(i))?.let(games::add)
             }
             offset += items.length()
-            if (offset >= json.optInt("total", offset)) break
+            serverTotal = json.optInt("total", offset)
+            if (offset >= serverTotal) break
+        }
+        listReport = buildString {
+            append("O servidor tem $serverTotal jogo(s); $offset lido(s); ${games.size} compatível(is).")
+            if (skippedMulti > 0) append(" Ignorados por terem vários arquivos: $skippedMulti.")
+            if (skippedExtension > 0) append(" Ignorados por extensão não suportada: $skippedExtension.")
+            if (skippedPlatforms.isNotEmpty()) {
+                append(" Plataformas ainda não suportadas: ")
+                append(skippedPlatforms.entries.joinToString { "${it.key} (${it.value})" })
+                append(".")
+            }
         }
         return games
     }
 
     private fun parseGame(item: JSONObject): RemoteGame? {
-        if (item.optBoolean("has_multiple_files", false)) return null
-        val platform = GamePlatforms.fromRomM(item.optString("platform_slug")) ?: return null
+        if (item.optBoolean("has_multiple_files", false)) {
+            skippedMulti++
+            return null
+        }
+        val slug = item.optString("platform_slug")
+        val platform = GamePlatforms.fromRomM(slug)
+        if (platform == null) {
+            skippedPlatforms[slug.ifEmpty { "?" }] = (skippedPlatforms[slug.ifEmpty { "?" }] ?: 0) + 1
+            return null
+        }
         val fileName = item.optString("fs_name").ifEmpty { return null }
-        if (File(fileName).extension.lowercase() !in platform.extensions + GamePlatforms.genericExtensions) return null
+        if (File(fileName).extension.lowercase() !in platform.extensions + GamePlatforms.genericExtensions) {
+            skippedExtension++
+            return null
+        }
         return RemoteGame(
             id = item.getLong("id"),
             title = item.optString("name").ifEmpty { File(fileName).nameWithoutExtension },

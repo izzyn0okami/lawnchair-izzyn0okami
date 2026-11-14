@@ -315,6 +315,7 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
     val client = remember { RomMClient(url, RomMSettings.token(context)) }
     var games by remember { mutableStateOf<List<RemoteGame>?>(null) }
     var error by remember { mutableStateOf("") }
+    var report by remember { mutableStateOf("") }
     var reload by remember { mutableIntStateOf(0) }
     var diskTick by remember { mutableIntStateOf(0) }
     val progress: SnapshotStateMap<Long, Long> = remember { mutableStateMapOf() }
@@ -324,7 +325,10 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
         games = null
         error = ""
         runCatching { withContext(Dispatchers.IO) { client.listGames() } }
-            .onSuccess { games = it }
+            .onSuccess {
+                games = it
+                report = client.listReport
+            }
             .onFailure {
                 games = emptyList()
                 error = context.getString(R.string.game_romm_list_error, it.message ?: it.toString())
@@ -369,7 +373,13 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
         when {
             list == null -> Text(stringResource(R.string.game_romm_loading), color = GameColors.textDim, fontSize = 16.sp)
 
-            list.isEmpty() && error.isEmpty() -> Text(stringResource(R.string.game_romm_empty), color = GameColors.textDim, fontSize = 16.sp)
+            list.isEmpty() && error.isEmpty() -> Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(stringResource(R.string.game_romm_empty), color = GameColors.textDim, fontSize = 16.sp)
+                if (report.isNotEmpty()) Text(report, color = GameColors.textDim, fontSize = 14.sp)
+            }
 
             else -> BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val columns = (((maxWidth - 80.dp) + ROMM_GAP) / (ROMM_CARD + ROMM_GAP)).toInt().coerceAtLeast(2)

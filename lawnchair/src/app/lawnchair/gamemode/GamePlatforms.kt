@@ -36,7 +36,18 @@ object GamePlatforms {
         val key = normalize(slug.orEmpty())
         if (key.isEmpty()) return null
         return all.firstOrNull { key in it.folderAliases || key == normalize(it.slug) }
-            ?: if ("megadrive" in key || "genesis" in key) bySlug("genesis") else null
+            ?: fuzzy(key)
+    }
+
+    /** Nomes longos que o RomM pode usar (ex.: "super-nintendo-entertainment-system"). */
+    private fun fuzzy(key: String): GamePlatform? = when {
+        "megadrive" in key || "genesis" in key -> bySlug("genesis")
+        "gameboyadvance" in key -> bySlug("gba")
+        "gameboycolor" in key -> bySlug("gbc")
+        "gameboy" in key -> bySlug("gb")
+        "supernintendo" in key || "superfamicom" in key || "snes" in key -> bySlug("snes")
+        "nintendoentertainment" in key || "famicom" in key -> bySlug("nes")
+        else -> null
     }
 
     fun bySlug(slug: String): GamePlatform? = all.firstOrNull { it.slug == slug }
