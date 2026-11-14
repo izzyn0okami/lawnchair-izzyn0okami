@@ -39,7 +39,7 @@ internal fun AchievementsScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 40.dp, vertical = 8.dp),
+            .padding(horizontal = 24.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(stringResource(R.string.game_ra_title), color = GameColors.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)

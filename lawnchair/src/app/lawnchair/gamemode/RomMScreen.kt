@@ -3,27 +3,31 @@ package app.lawnchair.gamemode
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -43,24 +47,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.android.launcher3.R
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val ROMM_CARD = 140.dp
-private val ROMM_GAP = 14.dp
+private val ROMM_CARD = 96.dp
+private val ROMM_GAP = 10.dp
 private const val REFRESH_INTERVAL_MS = 5 * 60 * 1000L
 
 private const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
@@ -82,7 +86,7 @@ internal fun ServerScreen(rootPath: String, onLibraryChange: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         if (!allowed) {
             Column(
-                modifier = Modifier.padding(horizontal = 40.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(stringResource(R.string.game_local_network_info), color = GameColors.danger, fontSize = 14.sp)
@@ -155,7 +159,7 @@ private fun ConnectForm(onConnect: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 40.dp, vertical = 8.dp),
+            .padding(horizontal = 24.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(stringResource(R.string.game_romm_title), color = GameColors.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
@@ -246,7 +250,7 @@ private fun PairingWait(pairing: DevicePairing, onApprove: (String) -> Unit, onF
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 40.dp, vertical = 8.dp),
+            .padding(horizontal = 24.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(stringResource(R.string.game_romm_title), color = GameColors.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
@@ -329,19 +333,21 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
         if (reload == 0 && games != null && fresh) return@LaunchedEffect
         error = ""
         refreshing = true
-        runCatching { withContext(Dispatchers.IO) { client.listGames() } }
-            .onSuccess {
-                games = it
-                report = client.listReport
-                GameLog.log("romm", "lista: ${it.size} jogos. $report")
-                RomMCache.save(context, url, it)
-            }
-            .onFailure {
-                GameLog.error("romm", "falha ao listar", it)
-                if (games == null) games = emptyList()
-                error = context.getString(R.string.game_romm_list_error, it.message ?: it.toString())
-            }
-        refreshing = false
+        try {
+            val fetched = withContext(Dispatchers.IO) { client.listGames() }
+            games = fetched
+            report = client.listReport
+            GameLog.log("romm", "lista: ${fetched.size} jogos. $report")
+            RomMCache.save(context, url, fetched)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            GameLog.error("romm", "falha ao listar", e)
+            if (games == null) games = emptyList()
+            error = context.getString(R.string.game_romm_list_error, e.message ?: e.toString())
+        } finally {
+            refreshing = false
+        }
     }
 
     fun download(game: RemoteGame) {
@@ -364,57 +370,86 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
         }
     }
 
+    val list = games
+    val groups = remember(list) { list.orEmpty().groupBy { it.platform }.toList().sortedBy { it.first.sortOrder } }
+    var filter by remember { mutableStateOf<String?>(null) }
+    val activeFilter = filter?.takeIf { slug -> groups.any { it.first.slug == slug } }
+    val shown = remember(groups, activeFilter) { groups.filter { activeFilter == null || it.first.slug == activeFilter } }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 40.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (refreshing && games != null) {
-                Text(stringResource(R.string.game_romm_updating), color = GameColors.textDim, fontSize = 13.sp)
-            }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 stringResource(R.string.game_romm_connected, url),
                 color = GameColors.textDim,
-                fontSize = 14.sp,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            GameButton(stringResource(R.string.game_mode_refresh), onClick = { reload++ }, modifier = Modifier.width(160.dp))
-            GameButton(stringResource(R.string.game_log_export), onClick = exportLog, modifier = Modifier.width(170.dp))
-            GameButton(stringResource(R.string.game_romm_disconnect), onClick = onDisconnect, danger = true, modifier = Modifier.width(150.dp))
+            if (refreshing && list != null) {
+                Text(stringResource(R.string.game_romm_updating), color = GameColors.textDim, fontSize = 12.sp)
+            }
+            GameButton(stringResource(R.string.game_romm_refresh), onClick = { reload++ }, compact = true)
+            GameButton(stringResource(R.string.game_log_export), onClick = exportLog, compact = true)
+            GameButton(stringResource(R.string.game_romm_disconnect), onClick = onDisconnect, danger = true, compact = true)
         }
-        if (error.isNotEmpty()) Text(error, color = GameColors.danger, fontSize = 14.sp)
-        val list = games
+        if (error.isNotEmpty()) Text(error, color = GameColors.danger, fontSize = 12.sp, maxLines = 2)
         when {
-            list == null -> Text(stringResource(R.string.game_romm_loading), color = GameColors.textDim, fontSize = 16.sp)
+            list == null -> Text(stringResource(R.string.game_romm_loading), color = GameColors.textDim, fontSize = 14.sp)
 
             list.isEmpty() && error.isEmpty() -> Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(stringResource(R.string.game_romm_empty), color = GameColors.textDim, fontSize = 16.sp)
-                if (report.isNotEmpty()) Text(report, color = GameColors.textDim, fontSize = 14.sp)
+                Text(stringResource(R.string.game_romm_empty), color = GameColors.textDim, fontSize = 14.sp)
+                if (report.isNotEmpty()) Text(report, color = GameColors.textDim, fontSize = 12.sp)
             }
 
-            else -> BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val columns = (((maxWidth - 80.dp) + ROMM_GAP) / (ROMM_CARD + ROMM_GAP)).toInt().coerceAtLeast(2)
-                LazyColumn(
+            else -> {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item(key = "all") {
+                        PlatformChip(stringResource(R.string.game_romm_all_count, list.size), activeFilter == null) { filter = null }
+                    }
+                    items(groups, key = { it.first.slug }) { (platform, platformGames) ->
+                        PlatformChip(
+                            stringResource(R.string.game_romm_platform_count, platform.name, platformGames.size),
+                            activeFilter == platform.slug,
+                        ) { filter = platform.slug }
+                    }
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(ROMM_CARD),
+                    horizontalArrangement = Arrangement.spacedBy(ROMM_GAP),
                     verticalArrangement = Arrangement.spacedBy(ROMM_GAP),
-                    contentPadding = PaddingValues(vertical = 8.dp),
+                    contentPadding = PaddingValues(bottom = 8.dp),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(list.chunked(columns), key = { row -> row.first().id }) { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(ROMM_GAP)) {
-                            row.forEach { game ->
-                                val downloaded = remember(game.id, diskTick) { game.destination(root).isFile }
-                                RemoteCard(
-                                    game = game,
-                                    client = client,
-                                    downloaded = downloaded,
-                                    downloadedBytes = progress[game.id],
-                                    onClick = { if (!downloaded) download(game) },
+                    shown.forEach { (platform, platformGames) ->
+                        if (activeFilter == null) {
+                            item(key = "h-${platform.slug}", span = { GridItemSpan(maxLineSpan) }) {
+                                Text(
+                                    text = stringResource(R.string.game_romm_platform_count, platform.name, platformGames.size),
+                                    color = GameColors.text,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(top = 4.dp),
                                 )
                             }
+                        }
+                        items(platformGames, key = { it.id }) { game ->
+                            val downloaded = remember(game.id, diskTick) { game.destination(root).isFile }
+                            RemoteCard(
+                                game = game,
+                                client = client,
+                                downloaded = downloaded,
+                                downloadedBytes = progress[game.id],
+                                onClick = { if (!downloaded) download(game) },
+                            )
                         }
                     }
                 }
@@ -426,37 +461,60 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
 @Composable
 private fun RemoteCard(game: RemoteGame, client: RomMClient, downloaded: Boolean, downloadedBytes: Long?, onClick: () -> Unit) {
     val context = LocalContext.current
-    val cover by produceState<ImageBitmap?>(null, game.id) {
-        value = withContext(Dispatchers.IO) {
-            client.cover(context, game)?.let { BitmapFactory.decodeFile(it.absolutePath)?.asImageBitmap() }
-        }
+    val cover by produceState(RomMCovers.cached(game.id), game.id) {
+        if (value == null) value = withContext(Dispatchers.IO) { RomMCovers.load(context, client, game) }
     }
-    val statusText = when {
-        downloadedBytes != null -> {
-            val percent = if (game.sizeBytes > 0) (downloadedBytes * 100 / game.sizeBytes).toInt().coerceIn(0, 100) else 0
-            stringResource(R.string.game_romm_downloading, percent)
+    val percent = downloadedBytes?.let { if (game.sizeBytes > 0) (it * 100 / game.sizeBytes).toInt().coerceIn(0, 100) else 0 }
+    FocusSurface(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp)) {
+        Column {
+            Box(modifier = Modifier.fillMaxWidth().aspectRatio(COVER_RATIO).background(GameColors.surfaceHigh)) {
+                val image = cover
+                if (image != null) {
+                    Image(bitmap = image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                }
+                if (downloaded) {
+                    Text(
+                        text = stringResource(R.string.game_romm_downloaded),
+                        color = GameColors.onAccent,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .background(GameColors.success, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 2.dp),
+                    )
+                }
+                if (percent != null) {
+                    Box(modifier = Modifier.fillMaxSize().background(GameColors.scrim), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = stringResource(R.string.game_romm_downloading, percent),
+                            color = GameColors.text,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth(percent / 100f)
+                            .height(4.dp)
+                            .background(GameColors.accent),
+                    )
+                }
+            }
+            Text(
+                text = game.title,
+                color = GameColors.text,
+                fontSize = 11.sp,
+                lineHeight = 13.sp,
+                minLines = 2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+            )
         }
-
-        downloaded -> stringResource(R.string.game_romm_downloaded)
-
-        else -> stringResource(R.string.game_romm_download)
-    }
-    FocusSurface(onClick = onClick, modifier = Modifier.size(ROMM_CARD)) {
-        val image = cover
-        if (image != null) {
-            Image(bitmap = image, contentDescription = game.title, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-        } else {
-            Text(game.title, color = GameColors.text, fontSize = 13.sp, maxLines = 3, modifier = Modifier.padding(10.dp))
-        }
-        Text(
-            text = statusText,
-            color = if (downloaded) GameColors.success else GameColors.text,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(6.dp),
-        )
     }
 }
+
+private const val COVER_RATIO = 0.75f

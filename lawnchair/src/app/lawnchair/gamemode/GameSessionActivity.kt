@@ -15,12 +15,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -348,10 +349,11 @@ private fun PauseMenu(
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .width(380.dp)
+                .width(340.dp)
                 .background(GameColors.panel)
-                .padding(horizontal = 32.dp, vertical = 40.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
                 text = stringResource(R.string.game_session_paused).uppercase(),
@@ -361,10 +363,10 @@ private fun PauseMenu(
             Text(
                 text = title,
                 color = GameColors.text,
-                fontSize = 24.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
-                modifier = Modifier.padding(bottom = if (subtitle == null) 16.dp else 2.dp),
+                modifier = Modifier.padding(bottom = if (subtitle == null) 8.dp else 2.dp),
             )
             if (subtitle != null) {
                 Text(text = subtitle, color = GameColors.success, fontSize = 14.sp, modifier = Modifier.padding(bottom = 14.dp))
@@ -373,9 +375,13 @@ private fun PauseMenu(
             GameButton(stringResource(R.string.game_session_save_state), onSave)
             GameButton(stringResource(R.string.game_session_load_state), onLoad, enabled = canLoad)
             GameButton(stringResource(R.string.game_session_reset), onReset)
-            GameButton(stringResource(R.string.game_session_exit), onExit, danger = true, modifier = Modifier.padding(top = 12.dp))
-            Spacer(Modifier.weight(1f))
-            Text(text = stringResource(R.string.game_session_autosave_note), color = GameColors.textDim, fontSize = 13.sp)
+            GameButton(stringResource(R.string.game_session_exit), onExit, danger = true, modifier = Modifier.padding(top = 8.dp))
+            Text(
+                text = stringResource(R.string.game_session_autosave_note),
+                color = GameColors.textDim,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
         }
     }
 }

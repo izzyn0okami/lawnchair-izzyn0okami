@@ -46,8 +46,8 @@ import java.util.Date
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private val CARD_SIZE = 140.dp
-private val CARD_GAP = 14.dp
+private val CARD_SIZE = 108.dp
+private val CARD_GAP = 10.dp
 
 @Composable
 internal fun LibraryScreen(
@@ -75,7 +75,7 @@ internal fun LibraryScreen(
     }
 
     if (games.isEmpty() && androidGames.isEmpty()) {
-        Column(modifier = Modifier.fillMaxSize().padding(40.dp)) {
+        Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
             Text(
                 text = stringResource(R.string.game_mode_empty_library),
                 color = GameColors.textDim,
@@ -86,11 +86,11 @@ internal fun LibraryScreen(
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val columns = (((maxWidth - 80.dp) + CARD_GAP) / (CARD_SIZE + CARD_GAP)).toInt().coerceAtLeast(2)
+        val columns = (((maxWidth - 48.dp) + CARD_GAP) / (CARD_SIZE + CARD_GAP)).toInt().coerceAtLeast(2)
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(22.dp),
-            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 4.dp),
         ) {
             if (hero != null) {
                 item(key = "hero") {
@@ -106,7 +106,7 @@ internal fun LibraryScreen(
             }
             if (recent.isNotEmpty()) {
                 item(key = "recent") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SectionTitle(stringResource(R.string.game_recent))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(CARD_GAP)) {
                             items(recent, key = { it.path }) { game ->
@@ -117,7 +117,7 @@ internal fun LibraryScreen(
                 }
             }
             item(key = "platforms") {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SectionTitle(stringResource(R.string.game_by_platform))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         item {
@@ -136,7 +136,7 @@ internal fun LibraryScreen(
             }
             if (showAndroid && androidSorted.isNotEmpty()) {
                 item(key = "android") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SectionTitle(stringResource(R.string.game_android))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(CARD_GAP)) {
                             items(androidSorted, key = { it.packageName }) { game ->
@@ -172,16 +172,16 @@ private fun AndroidCard(game: AndroidGame, onClick: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            icon?.let { Image(bitmap = it, contentDescription = null, modifier = Modifier.size(72.dp)) }
-                ?: Box(modifier = Modifier.size(72.dp))
-            Text(text = game.title, color = GameColors.text, fontSize = 13.sp, maxLines = 2)
+            icon?.let { Image(bitmap = it, contentDescription = null, modifier = Modifier.size(56.dp)) }
+                ?: Box(modifier = Modifier.size(56.dp))
+            Text(text = game.title, color = GameColors.text, fontSize = 12.sp, maxLines = 2)
         }
     }
 }
 
 @Composable
 private fun SectionTitle(text: String) {
-    Text(text = text, color = GameColors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+    Text(text = text, color = GameColors.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
 }
 
 @Composable
@@ -192,7 +192,7 @@ private fun GameCard(game: LocalGame, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PlatformChip(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun PlatformChip(label: String, selected: Boolean, onClick: () -> Unit) {
     FocusSurface(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
@@ -201,8 +201,9 @@ private fun PlatformChip(label: String, selected: Boolean, onClick: () -> Unit) 
         Text(
             text = label,
             color = if (selected) GameColors.text else GameColors.textDim,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+            fontSize = 13.sp,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
         )
     }
 }
@@ -216,25 +217,25 @@ private fun HeroSection(
     onPlay: () -> Unit,
     onDetails: () -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.Bottom) {
-        CoverTile(game, modifier = Modifier.size(width = 170.dp, height = 220.dp).clip(RoundedCornerShape(12.dp)))
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.Bottom) {
+        CoverTile(game, modifier = Modifier.size(width = 112.dp, height = 150.dp).clip(RoundedCornerShape(12.dp)))
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = stringResource(if (played) R.string.game_continue_playing else R.string.game_featured).uppercase(),
                 color = GameColors.textDim,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
             )
-            Text(text = game.title, color = GameColors.text, fontSize = 34.sp, fontWeight = FontWeight.Bold, maxLines = 2)
-            Text(text = game.platform.name, color = GameColors.textDim, fontSize = 15.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
+            Text(text = game.title, color = GameColors.text, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 2)
+            Text(text = game.platform.name, color = GameColors.textDim, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 6.dp)) {
                 GameButton(
                     label = stringResource(if (played) R.string.game_continue else R.string.game_play),
                     onClick = onPlay,
                     primary = true,
                     enabled = !busy,
-                    modifier = Modifier.width(170.dp).focusRequester(focus),
+                    modifier = Modifier.width(140.dp).focusRequester(focus),
                 )
-                GameButton(label = stringResource(R.string.game_details), onClick = onDetails, modifier = Modifier.width(150.dp))
+                GameButton(label = stringResource(R.string.game_details), onClick = onDetails, modifier = Modifier.width(120.dp))
             }
         }
     }
@@ -257,30 +258,30 @@ internal fun GameDetailScreen(
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 60.dp, vertical = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(44.dp),
+            .padding(horizontal = 32.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(28.dp),
     ) {
-        CoverTile(game, modifier = Modifier.size(width = 240.dp, height = 320.dp).clip(RoundedCornerShape(14.dp)))
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
-            Text(text = game.platform.name.uppercase(), color = GameColors.textDim, fontSize = 14.sp)
-            Text(text = game.title, color = GameColors.text, fontSize = 38.sp, fontWeight = FontWeight.Bold, maxLines = 3)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
+        CoverTile(game, modifier = Modifier.size(width = 150.dp, height = 200.dp).clip(RoundedCornerShape(14.dp)))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
+            Text(text = game.platform.name.uppercase(), color = GameColors.textDim, fontSize = 12.sp)
+            Text(text = game.title, color = GameColors.text, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 3)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
                 GameButton(
                     label = stringResource(R.string.game_play),
                     onClick = onPlay,
                     primary = true,
                     enabled = !busy,
-                    modifier = Modifier.width(170.dp).focusRequester(playFocus),
+                    modifier = Modifier.width(130.dp).focusRequester(playFocus),
                 )
                 GameButton(
                     label = stringResource(R.string.game_load_state_start),
                     onClick = onLoad,
                     enabled = hasState && !busy,
-                    modifier = Modifier.width(200.dp),
+                    modifier = Modifier.width(170.dp),
                 )
-                GameButton(label = stringResource(R.string.game_hint_back), onClick = onBack, modifier = Modifier.width(130.dp))
+                GameButton(label = stringResource(R.string.game_hint_back), onClick = onBack, modifier = Modifier.width(100.dp))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(40.dp), modifier = Modifier.padding(top = 14.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(28.dp), modifier = Modifier.padding(top = 8.dp)) {
                 Stat(stringResource(R.string.game_stat_playtime), formatPlaytime(history.playtimeMs))
                 Stat(
                     stringResource(R.string.game_stat_last_played),
@@ -300,8 +301,8 @@ internal fun GameDetailScreen(
 @Composable
 private fun Stat(label: String, value: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(text = label.uppercase(), color = GameColors.textDim, fontSize = 12.sp)
-        Text(text = value, color = GameColors.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+        Text(text = label.uppercase(), color = GameColors.textDim, fontSize = 11.sp)
+        Text(text = value, color = GameColors.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -336,9 +337,9 @@ internal fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 40.dp, vertical = 8.dp)
+            .padding(horizontal = 24.dp, vertical = 4.dp)
             .width(520.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             text = stringResource(R.string.game_mode_folder_label, rootPath),
@@ -358,7 +359,7 @@ internal fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text = stringResource(R.string.game_mode_auto_enter), color = GameColors.text, fontSize = 17.sp)
+                Text(text = stringResource(R.string.game_mode_auto_enter), color = GameColors.text, fontSize = 16.sp)
                 Switch(checked = autoEnter, onCheckedChange = null)
             }
         }

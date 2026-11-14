@@ -70,6 +70,7 @@ fun GameButton(
     primary: Boolean = false,
     danger: Boolean = false,
     enabled: Boolean = true,
+    compact: Boolean = false,
 ) {
     val textColor = when {
         !enabled -> GameColors.textDim.copy(alpha = 0.5f)
@@ -82,14 +83,15 @@ fun GameButton(
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
         background = if (primary && enabled) GameColors.accent else GameColors.surface,
-        modifier = modifier.fillMaxWidth(),
+        modifier = if (compact) modifier else modifier.fillMaxWidth(),
     ) {
         Text(
             text = label,
             color = textColor,
-            fontSize = 17.sp,
+            fontSize = if (compact) 14.sp else 16.sp,
+            maxLines = 1,
             fontWeight = if (primary) FontWeight.Bold else FontWeight.Normal,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = if (compact) 14.dp else 18.dp, vertical = if (compact) 8.dp else 10.dp),
         )
     }
 }

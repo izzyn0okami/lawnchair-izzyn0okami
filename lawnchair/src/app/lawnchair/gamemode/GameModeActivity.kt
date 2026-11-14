@@ -235,8 +235,8 @@ private fun GameModeRoot(refreshKey: Int, onExit: () -> Unit) {
             Text(
                 text = status,
                 color = GameColors.textDim,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(horizontal = 40.dp, vertical = 6.dp),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
             )
         }
         HintBar(inDetail = current != null)
@@ -271,16 +271,16 @@ private fun TopBar(selected: GameTab, onSelect: (GameTab) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 40.dp, vertical = 16.dp),
+            .padding(horizontal = 24.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             text = "Tandem",
             color = GameColors.text,
-            fontSize = 20.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(end = 16.dp),
+            modifier = Modifier.padding(end = 12.dp),
         )
         GameTab.entries.forEach { entry ->
             FocusSurface(
@@ -290,9 +290,9 @@ private fun TopBar(selected: GameTab, onSelect: (GameTab) -> Unit) {
                 Text(
                     text = stringResource(entry.label),
                     color = if (entry == selected) GameColors.text else GameColors.textDim,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = if (entry == selected) FontWeight.SemiBold else FontWeight.Normal,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 )
             }
         }
@@ -305,8 +305,8 @@ private fun HintBar(inDetail: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .background(GameColors.bar)
-            .padding(horizontal = 40.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(28.dp),
+            .padding(horizontal = 24.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         Hint("A", stringResource(if (inDetail) R.string.game_play else R.string.game_hint_select))
         Hint("B", stringResource(R.string.game_hint_back))
@@ -316,7 +316,7 @@ private fun HintBar(inDetail: Boolean) {
 @Composable
 private fun Hint(button: String, label: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text = button, color = GameColors.text, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        Text(text = label, color = GameColors.textDim, fontSize = 14.sp)
+        Text(text = button, color = GameColors.text, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(text = label, color = GameColors.textDim, fontSize = 12.sp)
     }
 }

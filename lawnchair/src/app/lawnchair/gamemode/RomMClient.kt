@@ -356,13 +356,15 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
         val file = File(File(context.cacheDir, "romm_covers").apply { mkdirs() }, "${game.id}.img")
         if (file.isFile && file.length() > 0) return file
         val url = if (path.startsWith("http")) path.toHttpUrl() else base.resolve(path.trimStart('/')) ?: return null
+        // Grava num arquivo temporário e só então renomeia: outra tela nunca lê uma capa pela metade.
+        val temp = File(file.parentFile, "${file.name}.${Thread.currentThread().id}.part")
         return runCatching {
             http.newCall(request(url).build()).execute().use { response ->
                 if (!response.isSuccessful) return null
-                file.outputStream().use { response.body.byteStream().copyTo(it) }
+                temp.outputStream().use { response.body.byteStream().copyTo(it) }
             }
-            file
-        }.getOrNull()
+            if (temp.renameTo(file)) file else null
+        }.also { temp.delete() }.getOrNull()
     }
 
     /** Saves (bateria) e estados guardados no servidor para um jogo. */
