@@ -107,7 +107,11 @@ internal fun BiosScreen(rootPath: String) {
                     val need = stringResource(if (platform.biosRequired) R.string.game_bios_required else R.string.game_bios_optional)
                     Text(
                         text = "${platform.name} · $need",
-                        color = if (ready) GameColors.success else if (platform.biosRequired) GameColors.danger else GameColors.text,
+                        color = when {
+                            ready -> GameColors.success
+                            platform.biosRequired -> GameColors.danger
+                            else -> GameColors.text
+                        },
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                     )

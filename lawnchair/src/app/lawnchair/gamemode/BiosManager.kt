@@ -19,8 +19,7 @@ object BiosManager {
     fun has(context: Context, file: BiosFile): Boolean = File(systemDir(context), file.name).isFile
 
     /** O jogo pode rodar? (BIOS opcional ou ao menos um dos obrigatórios presente) */
-    fun isReady(context: Context, platform: GamePlatform): Boolean =
-        !platform.biosRequired || platform.bios.any { has(context, it) }
+    fun isReady(context: Context, platform: GamePlatform): Boolean = !platform.biosRequired || platform.bios.any { has(context, it) }
 
     private fun canonical(name: String): BiosFile? {
         val lower = name.lowercase()
