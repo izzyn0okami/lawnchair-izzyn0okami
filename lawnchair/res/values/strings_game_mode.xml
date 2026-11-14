@@ -68,6 +68,7 @@
     <string name="game_romm_connected">Conectado a %1$s</string>
     <string name="game_romm_disconnect">Desconectar</string>
     <string name="game_romm_updating">Atualizando…</string>
+    <string name="game_log_export">Exportar logs</string>
     <string name="game_romm_loading">Carregando a lista de jogos…</string>
     <string name="game_romm_empty">Nenhum jogo compatível no servidor (por enquanto: NES, SNES, Game Boy, GBC, GBA e Mega Drive de arquivo único).</string>
     <string name="game_romm_list_error">Não consegui listar os jogos: %1$s</string>

@@ -61,6 +61,7 @@ class GameModeActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        GameLog.init(applicationContext)
         // Activity só possui Context válido depois que o Android conclui a anexação.
         // Inicializar o watcher aqui evita acessar applicationContext durante a construção.
         lostWatcher = ControllerLostWatcher(applicationContext) {

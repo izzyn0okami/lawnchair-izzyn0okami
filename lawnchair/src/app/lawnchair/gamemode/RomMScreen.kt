@@ -66,7 +66,7 @@ private const val REFRESH_INTERVAL_MS = 5 * 60 * 1000L
 private const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
 
 /** Do Android 17 em diante, apps novos precisam da permissão de rede local para falar com aparelhos da casa. */
-private fun localNetworkGranted(context: Context): Boolean = Build.VERSION.SDK_INT < 37 ||
+internal fun localNetworkGranted(context: Context): Boolean = Build.VERSION.SDK_INT < 37 ||
     ContextCompat.checkSelfPermission(context, LOCAL_NETWORK_PERMISSION) == PackageManager.PERMISSION_GRANTED
 
 /** Aba do servidor RomM: conectar por aprovação no navegador, listar jogos e baixar para a pasta de jogos. */
@@ -318,6 +318,7 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
     var refreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     var report by remember { mutableStateOf("") }
+    val exportLog = rememberLogExporter()
     var reload by remember { mutableIntStateOf(0) }
     var diskTick by remember { mutableIntStateOf(0) }
     val progress: SnapshotStateMap<Long, Long> = remember { mutableStateMapOf() }
@@ -332,9 +333,11 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
             .onSuccess {
                 games = it
                 report = client.listReport
+                GameLog.log("romm", "lista: ${it.size} jogos. $report")
                 RomMCache.save(context, url, it)
             }
             .onFailure {
+                GameLog.error("romm", "falha ao listar", it)
                 if (games == null) games = emptyList()
                 error = context.getString(R.string.game_romm_list_error, it.message ?: it.toString())
             }
@@ -351,7 +354,10 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
                     client.download(game, target) { bytes -> progress[game.id] = bytes }
                     SaveSync.link(context, target.absolutePath, game.id)
                 }
-            }.onFailure { error = context.getString(R.string.game_romm_download_error, game.title, it.message ?: it.toString()) }
+            }.onFailure {
+                GameLog.error("romm", "falha ao baixar ${game.title}", it)
+                error = context.getString(R.string.game_romm_download_error, game.title, it.message ?: it.toString())
+            }
             progress.remove(game.id)
             diskTick++
             onLibraryChange()
@@ -374,7 +380,8 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
                 fontSize = 14.sp,
                 modifier = Modifier.weight(1f),
             )
-            GameButton(stringResource(R.string.game_mode_refresh), onClick = { reload++ }, modifier = Modifier.width(200.dp))
+            GameButton(stringResource(R.string.game_mode_refresh), onClick = { reload++ }, modifier = Modifier.width(160.dp))
+            GameButton(stringResource(R.string.game_log_export), onClick = exportLog, modifier = Modifier.width(170.dp))
             GameButton(stringResource(R.string.game_romm_disconnect), onClick = onDisconnect, danger = true, modifier = Modifier.width(150.dp))
         }
         if (error.isNotEmpty()) Text(error, color = GameColors.danger, fontSize = 14.sp)

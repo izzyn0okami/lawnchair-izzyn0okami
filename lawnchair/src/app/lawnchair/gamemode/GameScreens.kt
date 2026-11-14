@@ -362,6 +362,7 @@ internal fun SettingsScreen(
                 Switch(checked = autoEnter, onCheckedChange = null)
             }
         }
+        GameButton(stringResource(R.string.game_log_export), rememberLogExporter())
         GameButton(stringResource(R.string.game_mode_exit), onExit, danger = true)
         Box(modifier = Modifier.height(12.dp))
     }

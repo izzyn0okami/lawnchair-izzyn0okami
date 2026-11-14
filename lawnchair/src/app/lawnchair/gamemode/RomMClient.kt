@@ -218,10 +218,17 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
                 .addQueryParameter("with_filter_values", "false")
                 .build()
             val json = longHttp.newCall(request(url).build()).execute().use { response ->
+                GameLog.log("romm", "GET api/roms offset=$offset -> ${response.code}")
                 if (!response.isSuccessful) throw IOException("Servidor respondeu ${response.code}")
-                JSONObject(response.body.string())
+                val text = response.body.string()
+                if (offset == 0) GameLog.log("romm", "início da resposta: ${text.take(600)}")
+                JSONObject(text)
             }
-            val items = json.optJSONArray("items") ?: break
+            val items = json.optJSONArray("items")
+            if (items == null) {
+                GameLog.log("romm", "resposta sem 'items'; chaves: ${json.keys().asSequence().toList()}")
+                break
+            }
             if (items.length() == 0) break
             for (i in 0 until items.length()) {
                 parseGame(items.getJSONObject(i))?.let(games::add)
@@ -251,6 +258,7 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
         val slug = item.optString("platform_slug")
         val platform = GamePlatforms.fromRomM(slug)
         if (platform == null) {
+            if (skippedPlatforms[slug.ifEmpty { "?" }] == null) GameLog.log("romm", "plataforma ignorada: '$slug'")
             skippedPlatforms[slug.ifEmpty { "?" }] = (skippedPlatforms[slug.ifEmpty { "?" }] ?: 0) + 1
             return null
         }

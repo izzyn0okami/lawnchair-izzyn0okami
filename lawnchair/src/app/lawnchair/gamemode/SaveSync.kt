@@ -58,7 +58,7 @@ object SaveSync {
                     .maxByOrNull { it.updatedAtMs } ?: continue
                 pullOne(context, client, store, kind, file, remote, romPath)
             }
-        }
+        }.onFailure { GameLog.error("saves", "falha ao buscar saves de ${File(romPath).name}", it) }
     }
 
     private fun pullOne(context: Context, client: RomMClient, store: SaveStore, kind: RemoteFileKind, file: File, remote: RemoteFile, romPath: String) {
@@ -105,7 +105,10 @@ object SaveSync {
     fun pushAsync(context: Context, romPath: String, coreId: String) {
         val app = context.applicationContext
         scope.launch {
-            lock.withLock { runCatching { push(app, romPath, coreId) } }
+            lock.withLock {
+                runCatching { push(app, romPath, coreId) }
+                    .onFailure { GameLog.error("saves", "falha ao enviar saves de ${File(romPath).name}", it) }
+            }
         }
     }
 
