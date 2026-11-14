@@ -61,6 +61,7 @@ import kotlinx.coroutines.withContext
 
 private val ROMM_CARD = 140.dp
 private val ROMM_GAP = 14.dp
+private const val REFRESH_INTERVAL_MS = 5 * 60 * 1000L
 
 private const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
 
@@ -313,7 +314,8 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
     val scope = rememberCoroutineScope()
     val url = remember { RomMSettings.url(context).orEmpty() }
     val client = remember { RomMClient(url, RomMSettings.token(context)) }
-    var games by remember { mutableStateOf<List<RemoteGame>?>(null) }
+    var games by remember { mutableStateOf(RomMCache.load(context, url)) }
+    var refreshing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     var report by remember { mutableStateOf("") }
     var reload by remember { mutableIntStateOf(0) }
@@ -322,17 +324,21 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
     val root = remember(rootPath) { File(rootPath) }
 
     LaunchedEffect(reload) {
-        games = null
+        val fresh = System.currentTimeMillis() - RomMCache.lastRefreshMs < REFRESH_INTERVAL_MS
+        if (reload == 0 && games != null && fresh) return@LaunchedEffect
         error = ""
+        refreshing = true
         runCatching { withContext(Dispatchers.IO) { client.listGames() } }
             .onSuccess {
                 games = it
                 report = client.listReport
+                RomMCache.save(context, url, it)
             }
             .onFailure {
-                games = emptyList()
+                if (games == null) games = emptyList()
                 error = context.getString(R.string.game_romm_list_error, it.message ?: it.toString())
             }
+        refreshing = false
     }
 
     fun download(game: RemoteGame) {
@@ -359,6 +365,9 @@ private fun ServerLibrary(rootPath: String, onLibraryChange: () -> Unit, onDisco
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (refreshing && games != null) {
+                Text(stringResource(R.string.game_romm_updating), color = GameColors.textDim, fontSize = 13.sp)
+            }
             Text(
                 stringResource(R.string.game_romm_connected, url),
                 color = GameColors.textDim,

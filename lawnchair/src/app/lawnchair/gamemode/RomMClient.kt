@@ -75,6 +75,7 @@ object RomMSettings {
 
     fun clear(context: Context) {
         prefs(context).edit { clear() }
+        RomMCache.clear(context)
     }
 }
 
