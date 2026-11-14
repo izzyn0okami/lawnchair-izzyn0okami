@@ -137,8 +137,7 @@ object ExternalEmulators {
 
     fun forPlatform(slug: String): List<ExternalEmulator> = all.filter { slug in it.platforms }
 
-    fun isInstalled(context: Context, packageName: String): Boolean =
-        runCatching { context.packageManager.getPackageInfo(packageName, 0) }.isSuccess
+    fun isInstalled(context: Context, packageName: String): Boolean = runCatching { context.packageManager.getPackageInfo(packageName, 0) }.isSuccess
 
     fun gameNativeInstalled(context: Context): Boolean = isInstalled(context, GAMENATIVE_PACKAGE)
 
