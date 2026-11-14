@@ -46,8 +46,7 @@ object RaSettings {
     }
 
     /** O hardcore bloqueia estados salvos neste jogo? (só em plataformas com conquistas e com conta) */
-    fun blocksStates(context: Context, platform: GamePlatform): Boolean =
-        hardcore(context) && isLoggedIn(context) && platform.raConsoleId != null
+    fun blocksStates(context: Context, platform: GamePlatform): Boolean = hardcore(context) && isLoggedIn(context) && platform.raConsoleId != null
 
     /** Conquistas desbloqueadas sem rede, guardadas como "idConquista|hashDoJogo|h" (h = 1 hardcore) para reenviar depois. */
     fun pending(context: Context): Set<String> = prefs(context).getStringSet("pending", emptySet()).orEmpty()
