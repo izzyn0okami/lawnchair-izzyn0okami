@@ -16,6 +16,9 @@ object BiosManager {
     /** Plataformas que usam algum BIOS. */
     fun platformsWithBios(): List<GamePlatform> = GamePlatforms.all.filter { it.bios.isNotEmpty() }
 
+    /** O nome pode trazer uma subpasta (ex.: "dc/dc_boot.bin"); o arquivo escolhido só precisa ter o mesmo nome final. */
+    private fun BiosFile.fileOnly(): String = File(name).name.lowercase()
+
     fun has(context: Context, file: BiosFile): Boolean = File(systemDir(context), file.name).isFile
 
     /** O jogo pode rodar? (BIOS opcional ou ao menos um dos obrigatórios presente) */
@@ -23,13 +26,14 @@ object BiosManager {
 
     private fun canonical(name: String): BiosFile? {
         val lower = name.lowercase()
-        return platformsWithBios().flatMap { it.bios }.firstOrNull { it.name.lowercase() == lower }
+        return platformsWithBios().flatMap { it.bios }.firstOrNull { it.fileOnly() == lower }
     }
 
     /** Copia o arquivo para a pasta de sistema se o nome for de um BIOS conhecido; devolve o BIOS ou nulo. */
     fun import(context: Context, displayName: String, input: InputStream): BiosFile? {
         val bios = canonical(File(displayName).name) ?: return null
         val target = File(systemDir(context), bios.name)
+        target.parentFile?.mkdirs()
         val temp = File(target.parentFile, "${target.name}.part")
         temp.outputStream().use { input.copyTo(it) }
         target.delete()
@@ -55,7 +59,9 @@ object BiosManager {
         for (firmware in client.listFirmware()) {
             val bios = canonical(firmware.fileName) ?: continue
             if (has(context, bios)) continue
-            client.downloadFirmware(firmware, File(systemDir(context), bios.name))
+            val target = File(systemDir(context), bios.name)
+            target.parentFile?.mkdirs()
+            client.downloadFirmware(firmware, target)
             count++
         }
         return count

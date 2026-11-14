@@ -289,7 +289,7 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
                 skippedExtension++
                 return null
             }
-            val referencing = playable.filter { File(it.getString("file_name")).extension.lowercase() in setOf("cue", "m3u") }
+            val referencing = playable.filter { File(it.getString("file_name")).extension.lowercase() in setOf("cue", "m3u", "gdi") }
             if (platform.discBased && (referencing.isNotEmpty() || playable.size > 1)) {
                 // Disco com várias partes (cue + bin, vários discos): baixa a pasta toda e abre a lista ou o primeiro cue.
                 folder = true
@@ -393,8 +393,8 @@ class RomMClient(private val baseUrl: String, private val token: String?) {
         val onlyChild = temp.listFiles()?.singleOrNull()
         val content = if (onlyChild != null && onlyChild.isDirectory) onlyChild else temp
         if (!File(content, game.fileName).isFile && game.fileName.endsWith(".m3u", ignoreCase = true)) {
-            val discs = content.listFiles().orEmpty().filter { it.isFile && it.extension.lowercase() in setOf("cue", "chd", "iso", "pbp") }
-            val cues = discs.filter { it.extension.equals("cue", ignoreCase = true) }
+            val discs = content.listFiles().orEmpty().filter { it.isFile && it.extension.lowercase() in setOf("cue", "gdi", "chd", "iso", "pbp") }
+            val cues = discs.filter { it.extension.lowercase() in setOf("cue", "gdi") }
             val list = (cues.ifEmpty { discs }).map { it.name }.sorted()
             check(list.isNotEmpty()) { "Nenhum disco encontrado em ${game.title}" }
             File(content, game.fileName).writeText(list.joinToString("\n") + "\n")
